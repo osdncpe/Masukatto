@@ -1,6 +1,7 @@
--- Obsidian UI 用 拡張機能セット（タブ整理版 / 絵文字なし）
--- 元のXOCU.luaから移植: Anti Loop Kill, Anti Lag, Platform TP, Anti Grab [BEST],
--- Anti Void, Anti Gucci (Blobman), Anti Kick, Loop Kill
+-- XOCU ELITE - 通常版（難読化なし）
+-- 防御: Anti Loop Kill, Anti Lag, Platform TP, Anti Grab, Anti Void, Anti Gucci, Anti Kick
+-- 攻撃: Loop Kill, Quick Kill
+-- ESP: アニメーションESP（6種類）
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
@@ -17,7 +18,7 @@ Library.ShowToggleFrameInKeybinds = true
 -- ウィンドウ作成
 -- ============================================================================
 local Window = Library:CreateWindow({
-    Title = "XOCU Defense",
+    Title = "XOCU ELITE",
     Footer = "Obsidian UI | Full Edition",
     Icon = 95816097006870,
     NotifySide = "Right",
@@ -25,11 +26,12 @@ local Window = Library:CreateWindow({
 })
 
 -- ============================================================================
--- タブ作成（整理済み / 絵文字なし）
+-- タブ作成
 -- ============================================================================
 local Tabs = {
     Defense = Window:AddTab("Defense", "shield"),
     Attack = Window:AddTab("Attack", "sword"),
+    Visuals = Window:AddTab("Visuals", "eye"),
     Keybinds = Window:AddTab("Keybinds", "keyboard"),
     ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
 }
@@ -42,29 +44,42 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
-local Debris = game:GetService("Debris")
 local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local TweenService = game:GetService("TweenService")
 
 -- ============================================================================
--- Defense タブ - グループボックス
+-- Defense タブ - 防御機能
 -- ============================================================================
 local DefenseMain = Tabs.Defense:AddLeftGroupbox("Defense Main", "shield")
 local DefenseExtra = Tabs.Defense:AddRightGroupbox("Extra Defense", "shield-plus")
 local AntiKickGroup = Tabs.Defense:AddRightGroupbox("Anti Kick", "ban")
 
 -- ============================================================================
--- Attack タブ - グループボックス
+-- Attack タブ - 攻撃機能
 -- ============================================================================
 local AttackGroup = Tabs.Attack:AddLeftGroupbox("Loop Kill", "sword")
 local TargetGroup = Tabs.Attack:AddRightGroupbox("Target Select", "user")
 
 -- ============================================================================
--- Keybinds タブ - グループボックス
+-- Visuals タブ - ESP
+-- ============================================================================
+local ESPMain = Tabs.Visuals:AddLeftGroupbox("ESP System", "eye")
+local ESPDesign = Tabs.Visuals:AddRightGroupbox("Design Studio", "palette")
+local ESPAnim = Tabs.Visuals:AddRightGroupbox("Animation", "sparkles")
+
+-- ============================================================================
+-- Keybinds タブ
 -- ============================================================================
 local KeybindGroup = Tabs.Keybinds:AddLeftGroupbox("Keybinds", "keyboard")
 
 -- ============================================================================
--- ターゲット選択用
+-- UI Settings タブ
+-- ============================================================================
+local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
+
+-- ============================================================================
+-- ターゲット選択用（Attackタブ）
 -- ============================================================================
 local selectedTarget = nil
 local targetName = ""
@@ -114,7 +129,7 @@ Players.PlayerRemoving:Connect(function()
 end)
 
 -- ============================================================================
--- 1. Anti Loop Kill（Defense Main）
+-- 【Defense】1. Anti Loop Kill
 -- ============================================================================
 local antiLoopKillActive = false
 local antiLoopKillConn = nil
@@ -125,12 +140,12 @@ DefenseMain:AddToggle("AntiLoopKill", {
     Default = false,
     Callback = function(Value)
         antiLoopKillActive = Value
-        
+
         if antiLoopKillConn then
             antiLoopKillConn:Disconnect()
             antiLoopKillConn = nil
         end
-        
+
         if Value then
             antiLoopKillConn = LocalPlayer.CharacterAdded:Connect(function(char)
                 task.wait(1)
@@ -149,7 +164,7 @@ DefenseMain:AddToggle("AntiLoopKill", {
 })
 
 -- ============================================================================
--- 2. Anti Lag（Defense Main）
+-- 【Defense】2. Anti Lag
 -- ============================================================================
 local antiLagActive = false
 local originalGrabEvents = {}
@@ -160,7 +175,7 @@ DefenseMain:AddToggle("AntiLag", {
     Default = false,
     Callback = function(Value)
         antiLagActive = Value
-        
+
         if Value then
             local grabFolder = ReplicatedStorage:FindFirstChild("GrabEvents")
             if grabFolder then
@@ -186,7 +201,7 @@ DefenseMain:AddToggle("AntiLag", {
 })
 
 -- ============================================================================
--- 3. Platform TP（Defense Main）
+-- 【Defense】3. Platform TP
 -- ============================================================================
 local platformTPToggle = false
 local platformTPActive = false
@@ -226,7 +241,7 @@ DefenseMain:AddLabel("Platform TP Execute")
         NoUI = true,
         Callback = function(Value)
             if not platformTPToggle then return end
-            
+
             local char = LocalPlayer.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if not root then return end
@@ -247,7 +262,7 @@ DefenseMain:AddLabel("Platform TP Execute")
     })
 
 -- ============================================================================
--- 4. Anti Grab [BEST]（Defense Main）
+-- 【Defense】4. Anti Grab [BEST]
 -- ============================================================================
 local AntiGrabEnabled = false
 local antiGrabConn = nil
@@ -260,19 +275,19 @@ local function StartAntiGrab()
         antiGrabConn:Disconnect()
         antiGrabConn = nil
     end
-    
+
     antiGrabConn = BeingHeld.Changed:Connect(function()
         if not AntiGrabEnabled then return end
-        
+
         local char = LocalPlayer.Character
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
         local hum = char and char:FindFirstChild("Humanoid")
-        
+
         if BeingHeld.Value then
             if hrp then 
                 hrp.Anchored = true 
             end
-            
+
             task.spawn(function()
                 while BeingHeld.Value and AntiGrabEnabled do 
                     local struggleEvent = ReplicatedStorage:FindFirstChild("CharacterEvents")
@@ -297,7 +312,7 @@ local function StartAntiGrab()
                     hrp.Anchored = false 
                 end
             end)
-            
+
             task.spawn(function()
                 while BeingHeld.Value and AntiGrabEnabled do
                     if hum then
@@ -318,7 +333,7 @@ local function StartAntiGrab()
             end
         end
     end)
-    
+
     if BeingHeld.Value then
         BeingHeld.Changed:Fire()
     end
@@ -353,7 +368,7 @@ DefenseMain:AddToggle("AntiGrabBest", {
 })
 
 -- ============================================================================
--- 5. Anti Void（Defense Main）
+-- 【Defense】5. Anti Void
 -- ============================================================================
 DefenseMain:AddToggle("AntiVoid", {
     Text = "Anti Void",
@@ -369,7 +384,7 @@ DefenseMain:AddToggle("AntiVoid", {
 })
 
 -- ============================================================================
--- 6. Anti Gucci (Blobman)（Defense Extra）
+-- 【Defense】6. Anti Gucci (Blobman)
 -- ============================================================================
 local antiGucciActive = false
 local antiGucciConn = nil
@@ -396,18 +411,18 @@ local function SpawnBlobman()
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
-    
+
     local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
     local spawnRemote = menuToys and menuToys:FindFirstChild("SpawnToyRemoteFunction")
     if not spawnRemote then return nil end
-    
+
     pcall(function()
         spawnRemote:InvokeServer("CreatureBlobman", hrp.CFrame * CFrame.new(0, 0, -5), Vector3.new(0, -15.716, 0))
     end)
-    
+
     local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
     if not folder then return nil end
-    
+
     for _ = 1, 30 do
         task.wait(0.1)
         local blob = folder:FindFirstChild("CreatureBlobman")
@@ -424,45 +439,45 @@ local function StartAntiGucci()
         antiGucciConn:Disconnect()
         antiGucciConn = nil
     end
-    
+
     CleanUpBlobman()
-    
+
     local blob = SpawnBlobman()
     if not blob then
         Library:Notify("Anti Gucci", "Blobman spawn failed!", 3)
         return
     end
-    
+
     local seat = blob:FindFirstChild("VehicleSeat")
     if not seat then
         Library:Notify("Anti Gucci", "Seat not found!", 3)
         return
     end
-    
+
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChild("Humanoid")
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    
+
     if not hum or not hrp then return end
-    
+
     hrp.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
     seat:Sit(hum)
-    
+
     antiGucciSeat = seat
-    
+
     antiGucciConn = RunService.Heartbeat:Connect(function()
         if not antiGucciActive then return end
-        
+
         local currentChar = LocalPlayer.Character
         local currentHum = currentChar and currentChar:FindFirstChild("Humanoid")
         local currentHrp = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
-        
+
         if not currentHum or not currentHrp then return end
-        
+
         if not currentHum.Sit and antiGucciSeat then
             antiGucciSeat:Sit(currentHum)
         end
-        
+
         pcall(function()
             local charEvents = ReplicatedStorage:FindFirstChild("CharacterEvents")
             if charEvents then
@@ -471,27 +486,27 @@ local function StartAntiGucci()
             end
         end)
     end)
-    
+
     Library:Notify("Anti Gucci", "Blobman spawned and seated!", 3)
 end
 
 local function StopAntiGucci()
     antiGucciActive = false
-    
+
     if antiGucciConn then
         antiGucciConn:Disconnect()
         antiGucciConn = nil
     end
-    
+
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChild("Humanoid")
     if hum then
         hum.Sit = false
     end
-    
+
     CleanUpBlobman()
     antiGucciSeat = nil
-    
+
     Library:Notify("Anti Gucci", "Disabled", 3)
 end
 
@@ -518,7 +533,7 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 -- ============================================================================
--- 7. Anti Kick (Shuriken)（Anti Kick Group）
+-- 【Defense】7. Anti Kick (Shuriken)
 -- ============================================================================
 local shurikenAntiKick = false
 local shurikenTask = nil
@@ -526,10 +541,10 @@ local shurikenTask = nil
 local function ClearShuriken()
     local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
     if not folder then return end
-    
+
     local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
     local destroyToy = menuToys and menuToys:FindFirstChild("DestroyToy")
-    
+
     for _, toy in pairs(folder:GetChildren()) do
         if toy.Name == "NinjaShuriken" or toy.Name == "AntiKick" or toy.Name == "NinjaKunai" then
             if destroyToy then
@@ -543,34 +558,34 @@ end
 
 local function StartShurikenAntiKick()
     ClearShuriken()
-    
+
     local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
     local setOwner = grabEvents and grabEvents:FindFirstChild("SetNetworkOwner")
     local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
     local spawnRemote = menuToys and menuToys:FindFirstChild("SpawnToyRemoteFunction")
-    
+
     if not setOwner or not spawnRemote then
         Library:Notify("Anti Kick", "Required remotes not found!", 3)
         return
     end
-    
+
     shurikenTask = task.spawn(function()
         while shurikenAntiKick do
             task.wait(0.05)
-            
+
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             local hum = char and char:FindFirstChild("Humanoid")
-            
+
             if not hrp or not hum or hum.Health <= 0 then
                 continue
             end
-            
+
             local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
             if not folder then continue end
-            
+
             local shuriken = folder:FindFirstChild("NinjaShuriken")
-            
+
             if not shuriken then
                 pcall(function()
                     spawnRemote:InvokeServer("NinjaShuriken", hrp.CFrame * CFrame.new(0, 12, 20), Vector3.zero)
@@ -581,7 +596,7 @@ local function StartShurikenAntiKick()
                     shuriken.Name = "AntiKick"
                 end
             end
-            
+
             if shuriken then
                 for _, part in pairs(shuriken:GetDescendants()) do
                     if part:IsA("BasePart") then
@@ -592,11 +607,11 @@ local function StartShurikenAntiKick()
                         part.Massless = true
                     end
                 end
-                
+
                 local soundPart = shuriken:FindFirstChild("SoundPart")
                 if soundPart then
                     pcall(function() setOwner:FireServer(soundPart, soundPart.CFrame) end)
-                    
+
                     if soundPart:FindFirstChild("PartOwner") and soundPart.PartOwner.Value == LocalPlayer.Name then
                         soundPart.CFrame = hrp.CFrame * CFrame.new(0, 2, 0)
                         soundPart.AssemblyLinearVelocity = Vector3.zero
@@ -606,7 +621,7 @@ local function StartShurikenAntiKick()
             end
         end
     end)
-    
+
     Library:Notify("Anti Kick", "Shuriken mode activated!", 3)
 end
 
@@ -636,7 +651,7 @@ AntiKickGroup:AddToggle("ShurikenAntiKick", {
 })
 
 -- ============================================================================
--- 8. Anti Kick (Item)（Anti Kick Group）
+-- 【Defense】8. Anti Kick (Item)
 -- ============================================================================
 local itemAntiKick = false
 local itemTask = nil
@@ -661,10 +676,10 @@ AntiKickGroup:AddDropdown("KickItemSelect", {
 local function ClearKickItem()
     local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
     if not folder then return end
-    
+
     local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
     local destroyToy = menuToys and menuToys:FindFirstChild("DestroyToy")
-    
+
     for _, toy in pairs(folder:GetChildren()) do
         if toy.Name == "AntiKickItem" then
             if destroyToy then
@@ -680,18 +695,18 @@ local function SpawnKickItem(itemName)
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
-    
+
     local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
     local spawnRemote = menuToys and menuToys:FindFirstChild("SpawnToyRemoteFunction")
     if not spawnRemote then return nil end
-    
+
     local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
     if not folder then return nil end
-    
+
     pcall(function()
         spawnRemote:InvokeServer(itemName, hrp.CFrame * CFrame.new(0, 14, 20), Vector3.zero)
     end)
-    
+
     for _ = 1, 30 do
         task.wait(0.1)
         local item = folder:FindFirstChild(itemName)
@@ -705,33 +720,33 @@ end
 
 local function StartItemAntiKick()
     ClearKickItem()
-    
+
     local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
     local setOwner = grabEvents and grabEvents:FindFirstChild("SetNetworkOwner")
-    
+
     if not setOwner then
         Library:Notify("Anti Kick", "SetNetworkOwner not found!", 3)
         return
     end
-    
+
     itemTask = task.spawn(function()
         local item = nil
         local soundPart = nil
-        
+
         while itemAntiKick do
             task.wait(0.05)
-            
+
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             local hum = char and char:FindFirstChild("Humanoid")
-            
+
             if not hrp or not hum or hum.Health <= 0 then
                 continue
             end
-            
+
             local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
             if not folder then continue end
-            
+
             if not item or not item.Parent then
                 ClearKickItem()
                 item = SpawnKickItem(selectedKickItem)
@@ -741,15 +756,15 @@ local function StartItemAntiKick()
                 end
                 soundPart = item:FindFirstChild("SoundPart") or item:FindFirstChildWhichIsA("BasePart")
             end
-            
+
             if not soundPart or not soundPart.Parent then
                 item = nil
                 soundPart = nil
                 continue
             end
-            
+
             pcall(function() setOwner:FireServer(soundPart, soundPart.CFrame) end)
-            
+
             for _, part in pairs(item:GetDescendants()) do
                 if part:IsA("BasePart") then
                     part.CanCollide = false
@@ -759,7 +774,7 @@ local function StartItemAntiKick()
                     part.Massless = true
                 end
             end
-            
+
             if soundPart:FindFirstChild("PartOwner") and soundPart.PartOwner.Value == LocalPlayer.Name then
                 local targetPart = Workspace:FindFirstChild("PlayerCharacterLocationDetector") or hrp
                 soundPart.CFrame = targetPart.CFrame
@@ -768,7 +783,7 @@ local function StartItemAntiKick()
             end
         end
     end)
-    
+
     Library:Notify("Anti Kick", "Item mode activated with " .. selectedKickItem, 3)
 end
 
@@ -798,7 +813,7 @@ AntiKickGroup:AddToggle("ItemAntiKick", {
 })
 
 -- ============================================================================
--- 9. Loop Kill（Attack Group）
+-- 【Attack】9. Loop Kill
 -- ============================================================================
 local loopKillActive = false
 local loopKillTask = nil
@@ -830,14 +845,14 @@ local function SpawnBlobmanForKill()
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
-    
+
     local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
     local spawnRemote = menuToys and menuToys:FindFirstChild("SpawnToyRemoteFunction")
     if not spawnRemote then return nil end
-    
+
     local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
     if not folder then return nil end
-    
+
     for _, toy in pairs(folder:GetChildren()) do
         if toy.Name == "CreatureBlobman" then
             local menuToys2 = ReplicatedStorage:FindFirstChild("MenuToys")
@@ -847,11 +862,11 @@ local function SpawnBlobmanForKill()
             end
         end
     end
-    
+
     pcall(function()
         spawnRemote:InvokeServer("CreatureBlobman", hrp.CFrame * CFrame.new(0, 0, -5), Vector3.new(0, -15, 0))
     end)
-    
+
     for _ = 1, 30 do
         task.wait(0.1)
         local blob = folder:FindFirstChild("CreatureBlobman")
@@ -868,18 +883,18 @@ local function StartLoopKill()
         Library:Notify("Loop Kill", "Please select a target first!", 3)
         return
     end
-    
+
     if loopKillTask then
         task.cancel(loopKillTask)
         loopKillTask = nil
     end
-    
+
     local target = selectedTarget
-    
+
     loopKillTask = task.spawn(function()
         local blob = nil
         local seat = nil
-        
+
         if useBlobman then
             blob = SpawnBlobmanForKill()
             if blob then
@@ -896,37 +911,37 @@ local function StartLoopKill()
                 end
             end
         end
-        
+
         local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
         local getOwner = grabEvents and grabEvents:FindFirstChild("SetNetworkOwner")
         local destroyLine = grabEvents and grabEvents:FindFirstChild("DestroyGrabLine")
-        
+
         while loopKillActive do
             task.wait(0.05)
-            
+
             if not target or not target.Parent then
                 Library:Notify("Loop Kill", "Target lost!", 3)
                 break
             end
-            
+
             local tChar = target.Character
             local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
             local tHum = tChar and tChar:FindFirstChild("Humanoid")
-            
+
             if not tHrp or not tHum or tHum.Health <= 0 then
                 task.wait(0.5)
                 continue
             end
-            
+
             local myChar = LocalPlayer.Character
             local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
             local myHum = myChar and myChar:FindFirstChild("Humanoid")
-            
+
             if not myHrp or not myHum then
                 task.wait(0.5)
                 continue
             end
-            
+
             if useBlobman and blob and blob.Parent then
                 local blobHrp = blob:FindFirstChild("HumanoidRootPart")
                 if blobHrp then
@@ -934,14 +949,14 @@ local function StartLoopKill()
                     blobHrp.AssemblyLinearVelocity = Vector3.zero
                     blobHrp.AssemblyAngularVelocity = Vector3.zero
                 end
-                
+
                 local remoteFolder = blob:FindFirstChild("BlobmanSeatAndOwnerScript")
                 if remoteFolder then
                     local grab = remoteFolder:FindFirstChild("CreatureGrab")
                     local drop = remoteFolder:FindFirstChild("CreatureDrop")
                     local detector = blob:FindFirstChild("RightDetector")
                     local weld = detector and (detector:FindFirstChild("RightWeld") or detector:FindFirstChild("RigidConstraint"))
-                    
+
                     if grab and drop and detector and weld then
                         pcall(function()
                             grab:FireServer(detector, tHrp, weld)
@@ -949,11 +964,11 @@ local function StartLoopKill()
                         end)
                     end
                 end
-                
+
                 tHrp.CFrame = myHrp.CFrame + Vector3.new(0, killHeight, 0)
                 tHrp.AssemblyLinearVelocity = Vector3.zero
                 tHrp.AssemblyAngularVelocity = Vector3.zero
-                
+
                 if getOwner then
                     pcall(function() getOwner:FireServer(tHrp, tHrp.CFrame) end)
                 end
@@ -962,19 +977,19 @@ local function StartLoopKill()
                     myHrp.CFrame = tHrp.CFrame + Vector3.new(0, 0, 5)
                     task.wait(0.1)
                 end
-                
+
                 if getOwner then
                     pcall(function() getOwner:FireServer(tHrp, tHrp.CFrame) end)
                 end
-                
+
                 if destroyLine then
                     pcall(function() destroyLine:FireServer(tHrp) end)
                 end
-                
+
                 tHrp.CFrame = myHrp.CFrame + Vector3.new(0, killHeight, 0)
                 tHrp.AssemblyLinearVelocity = Vector3.zero
                 tHrp.AssemblyAngularVelocity = Vector3.zero
-                
+
                 pcall(function()
                     local charEvents = ReplicatedStorage:FindFirstChild("CharacterEvents")
                     if charEvents then
@@ -982,7 +997,7 @@ local function StartLoopKill()
                         if ragdoll then ragdoll:FireServer(tHrp, 0) end
                     end
                 end)
-                
+
                 if tHum.Health > 0 then
                     tHum.Health = tHum.Health - 10
                     if tHum.Health <= 0 then
@@ -991,7 +1006,7 @@ local function StartLoopKill()
                 end
             end
         end
-        
+
         if blob and blob.Parent then
             local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
             local destroyToy = menuToys and menuToys:FindFirstChild("DestroyToy")
@@ -999,10 +1014,10 @@ local function StartLoopKill()
                 pcall(function() destroyToy:FireServer(blob) end)
             end
         end
-        
+
         Library:Notify("Loop Kill", "Stopped", 3)
     end)
-    
+
     Library:Notify("Loop Kill", "Started on " .. target.DisplayName, 3)
 end
 
@@ -1012,7 +1027,7 @@ local function StopLoopKill()
         task.cancel(loopKillTask)
         loopKillTask = nil
     end
-    
+
     local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
     if folder then
         local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
@@ -1023,7 +1038,7 @@ local function StopLoopKill()
             end
         end
     end
-    
+
     Library:Notify("Loop Kill", "Stopped", 3)
 end
 
@@ -1049,36 +1064,36 @@ AttackGroup:AddButton({
             Library:Notify("Quick Kill", "Select a target first!", 3)
             return
         end
-        
+
         local target = selectedTarget
         local tChar = target.Character
         local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
         local tHum = tChar and tChar:FindFirstChild("Humanoid")
-        
+
         if not tHrp or not tHum or tHum.Health <= 0 then
             Library:Notify("Quick Kill", "Target is dead or invalid!", 3)
             return
         end
-        
+
         local myChar = LocalPlayer.Character
         local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-        
+
         if not myHrp then return end
-        
+
         myHrp.CFrame = tHrp.CFrame + Vector3.new(0, 0, 3)
         task.wait(0.05)
-        
+
         local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
         local getOwner = grabEvents and grabEvents:FindFirstChild("SetNetworkOwner")
-        
+
         if getOwner then
             pcall(function() getOwner:FireServer(tHrp, tHrp.CFrame) end)
         end
-        
+
         tHrp.CFrame = myHrp.CFrame + Vector3.new(0, killHeight, 0)
         tHum.Health = 0
         tChar:BreakJoints()
-        
+
         Library:Notify("Quick Kill", target.DisplayName .. " killed!", 3)
     end,
     DoubleClick = false,
@@ -1087,7 +1102,714 @@ AttackGroup:AddButton({
 })
 
 -- ============================================================================
--- 10. Keybinds タブ
+-- 【Visuals】ESP（アニメーション付き）
+-- ============================================================================
+
+-- ESP設定
+local ESP = {
+    Enabled = false,
+    BoxType = "Glow",
+    BoxColor1 = Color3.fromRGB(0, 150, 255),
+    BoxColor2 = Color3.fromRGB(200, 0, 255),
+    BoxTransparency = 0.3,
+    BoxThickness = 2,
+    GlowSize = 8,
+    ShowName = true,
+    ShowDistance = true,
+    ShowHealth = true,
+    ShowHeadDot = true,
+    NameColor = Color3.fromRGB(255, 255, 255),
+    DistanceColor = Color3.fromRGB(0, 255, 200),
+    HealthColorGood = Color3.fromRGB(0, 255, 100),
+    HealthColorBad = Color3.fromRGB(255, 50, 50),
+    AnimType = "Pulse",
+    AnimSpeed = 1.0,
+    AnimIntensity = 1.0,
+    RainbowMode = false,
+    UseTeamColor = false,
+    ShowStatus = true,
+    ESPData = {},
+    ESPConn = nil,
+    AnimTime = 0,
+}
+
+local function CreateParticleEffect(part, color)
+    local emitter = Instance.new("ParticleEmitter")
+    emitter.Name = "ESPParticles"
+    emitter.Texture = "rbxassetid://2784415622"
+    emitter.Color = ColorSequence.new(color)
+    emitter.Rate = 5
+    emitter.Lifetime = NumberRange.new(0.5, 1.0)
+    emitter.SpreadAngle = Vector2.new(360, 360)
+    emitter.VelocityInheritance = 0
+    emitter.Speed = NumberRange.new(0.5, 1.5)
+    emitter.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.8),
+        NumberSequenceKeypoint.new(1, 1)
+    })
+    emitter.Size = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.1),
+        NumberSequenceKeypoint.new(1, 0.3)
+    })
+    emitter.Enabled = true
+    emitter.Parent = part
+    return emitter
+end
+
+local function CreateAnimatedBox(part, color1, color2, transparency, thickness, animType, animSpeed)
+    local group = Instance.new("Folder")
+    group.Name = "ESP_Animated"
+    group.Parent = part
+    
+    local box = Instance.new("BoxHandleAdornment")
+    box.Adornee = part
+    box.Color3 = color1
+    box.Transparency = transparency
+    box.Size = part.Size + Vector3.new(0.5, 0.5, 0.5)
+    box.AlwaysOnTop = true
+    box.ZIndex = 5
+    box.Parent = group
+    
+    local glow = Instance.new("BoxHandleAdornment")
+    glow.Adornee = part
+    glow.Color3 = color2
+    glow.Transparency = transparency + 0.2
+    glow.Size = part.Size + Vector3.new(1.5, 1.5, 1.5)
+    glow.AlwaysOnTop = true
+    glow.ZIndex = 3
+    glow.Parent = group
+    
+    if animType == "Glitch" or animType == "Flow" then
+        local p = CreateParticleEffect(part, color1)
+        p.Parent = group
+    end
+    
+    return group
+end
+
+local function CreateAnimatedHeadDot(head, color, animType, speed)
+    local dot = Instance.new("Part")
+    dot.Name = "HeadDot"
+    dot.Size = Vector3.new(0.4, 0.4, 0.4)
+    dot.Shape = Enum.PartType.Ball
+    dot.Material = Enum.Material.Neon
+    dot.Color = color
+    dot.Transparency = 0.1
+    dot.Anchored = true
+    dot.CanCollide = false
+    dot.CanTouch = false
+    dot.CanQuery = false
+    dot.CFrame = head.CFrame
+    dot.Parent = head
+    
+    local glow = Instance.new("SelectionBox")
+    glow.Adornee = dot
+    glow.Color3 = color
+    glow.Transparency = 0.3
+    glow.LineThickness = 3
+    glow.Parent = dot
+    
+    local p = CreateParticleEffect(dot, color)
+    p.Rate = 10
+    p.Lifetime = NumberRange.new(0.3, 0.8)
+    p.Parent = dot
+    
+    return dot
+end
+
+local function CreateAnimatedName(char, hrp, color)
+    local nameGui = Instance.new("BillboardGui")
+    nameGui.Adornee = hrp
+    nameGui.Size = UDim2.new(0, 250, 0, 40)
+    nameGui.StudsOffset = Vector3.new(0, 4.5, 0)
+    nameGui.AlwaysOnTop = true
+    nameGui.Parent = hrp
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Size = UDim2.new(1, 0, 1, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = color
+    nameLabel.TextStrokeTransparency = 0.2
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameLabel.TextScaled = true
+    nameLabel.Font = Enum.Font.GothamBold
+    
+    local player = Players:GetPlayerFromCharacter(char)
+    if player then
+        nameLabel.Text = player.DisplayName
+    end
+    
+    nameLabel.Parent = nameGui
+    
+    return nameGui
+end
+
+-- ESP更新
+local function UpdatePlayerESP(player)
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    local head = char and char:FindFirstChild("Head")
+    
+    if not hrp or not hum or hum.Health <= 0 then
+        if ESP.ESPData[player] then
+            for _, obj in pairs(ESP.ESPData[player]) do
+                if obj and obj.Parent then
+                    obj:Destroy()
+                end
+            end
+            ESP.ESPData[player] = nil
+        end
+        return
+    end
+    
+    if ESP.ESPData[player] then
+        for _, obj in pairs(ESP.ESPData[player]) do
+            if obj and obj.Parent then
+                obj:Destroy()
+            end
+        end
+        ESP.ESPData[player] = {}
+    else
+        ESP.ESPData[player] = {}
+    end
+    
+    local color1 = ESP.BoxColor1
+    local color2 = ESP.BoxColor2
+    
+    if ESP.RainbowMode then
+        local hue = (tick() / 5 + player.UserId / 1000) % 1
+        color1 = Color3.fromHSV(hue, 1, 1)
+        color2 = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
+    elseif ESP.UseTeamColor and player.Team then
+        color1 = player.Team.TeamColor
+        color2 = color1
+    end
+    
+    -- アニメーションボックス
+    local boxGroup = CreateAnimatedBox(
+        hrp, color1, color2,
+        ESP.BoxTransparency, ESP.BoxThickness,
+        ESP.AnimType, ESP.AnimSpeed
+    )
+    table.insert(ESP.ESPData[player], boxGroup)
+    
+    -- ヘッドドット
+    if ESP.ShowHeadDot and head then
+        local dot = CreateAnimatedHeadDot(head, color1, ESP.AnimType, ESP.AnimSpeed)
+        table.insert(ESP.ESPData[player], dot)
+    end
+    
+    -- 名前
+    if ESP.ShowName and char then
+        local nameGui = CreateAnimatedName(char, hrp, ESP.NameColor)
+        table.insert(ESP.ESPData[player], nameGui)
+    end
+    
+    -- 距離
+    if ESP.ShowDistance then
+        local distGui = Instance.new("BillboardGui")
+        distGui.Adornee = hrp
+        distGui.Size = UDim2.new(0, 120, 0, 25)
+        distGui.StudsOffset = Vector3.new(0, 3.2, 0)
+        distGui.AlwaysOnTop = true
+        distGui.Parent = hrp
+        
+        local distLabel = Instance.new("TextLabel")
+        distLabel.Size = UDim2.new(1, 0, 1, 0)
+        distLabel.BackgroundTransparency = 1
+        distLabel.TextColor3 = ESP.DistanceColor
+        distLabel.TextStrokeTransparency = 0.3
+        distLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+        distLabel.TextScaled = true
+        distLabel.Font = Enum.Font.Gotham
+        distLabel.Text = "0m"
+        distLabel.Parent = distGui
+        
+        table.insert(ESP.ESPData[player], distGui)
+    end
+    
+    -- 体力
+    if ESP.ShowHealth then
+        local healthGui = Instance.new("BillboardGui")
+        healthGui.Adornee = hrp
+        healthGui.Size = UDim2.new(0, 120, 0, 8)
+        healthGui.StudsOffset = Vector3.new(0, 3.6, 0)
+        healthGui.AlwaysOnTop = true
+        healthGui.Parent = hrp
+        
+        local bg = Instance.new("Frame")
+        bg.Size = UDim2.new(1, 0, 1, 0)
+        bg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+        bg.BackgroundTransparency = 0.5
+        bg.BorderSizePixel = 1
+        bg.BorderColor3 = Color3.fromRGB(255, 255, 255)
+        bg.Parent = healthGui
+        
+        local fill = Instance.new("Frame")
+        fill.Size = UDim2.new(1, 0, 1, 0)
+        fill.BackgroundColor3 = ESP.HealthColorGood
+        fill.BackgroundTransparency = 0
+        fill.BorderSizePixel = 0
+        fill.Parent = bg
+        
+        table.insert(ESP.ESPData[player], healthGui)
+        table.insert(ESP.ESPData[player], bg)
+        table.insert(ESP.ESPData[player], fill)
+    end
+    
+    -- ステータス
+    if ESP.ShowStatus then
+        local statusGui = Instance.new("BillboardGui")
+        statusGui.Adornee = hrp
+        statusGui.Size = UDim2.new(0, 80, 0, 20)
+        statusGui.StudsOffset = Vector3.new(0, 2.5, 0)
+        statusGui.AlwaysOnTop = true
+        statusGui.Parent = hrp
+        
+        local statusLabel = Instance.new("TextLabel")
+        statusLabel.Size = UDim2.new(1, 0, 1, 0)
+        statusLabel.BackgroundTransparency = 1
+        statusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        statusLabel.TextStrokeTransparency = 0.3
+        statusLabel.TextScaled = true
+        statusLabel.Font = Enum.Font.Gotham
+        statusLabel.Text = "● ONLINE"
+        statusLabel.Parent = statusGui
+        
+        table.insert(ESP.ESPData[player], statusGui)
+    end
+end
+
+-- ESPアニメーション更新ループ
+local function StartESPUpdater()
+    if ESP.ESPConn then
+        ESP.ESPConn:Disconnect()
+        ESP.ESPConn = nil
+    end
+    
+    ESP.ESPConn = RunService.Heartbeat:Connect(function()
+        if not ESP.Enabled then return end
+        
+        ESP.AnimTime = ESP.AnimTime + 0.03 * ESP.AnimSpeed
+        
+        local myChar = LocalPlayer.Character
+        local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        
+        for _, player in pairs(Players:GetPlayers()) do
+            if player == LocalPlayer then continue end
+            
+            local char = player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChild("Humanoid")
+            local head = char and char:FindFirstChild("Head")
+            
+            if not hrp or not hum or hum.Health <= 0 then
+                if ESP.ESPData[player] then
+                    for _, obj in pairs(ESP.ESPData[player]) do
+                        if obj and obj.Parent then
+                            obj:Destroy()
+                        end
+                    end
+                    ESP.ESPData[player] = nil
+                end
+                continue
+            end
+            
+            local data = ESP.ESPData[player]
+            if not data then continue end
+            
+            local t = ESP.AnimTime
+            
+            -- アニメーション処理
+            for _, obj in pairs(data) do
+                if obj:IsA("BoxHandleAdornment") and obj.Name ~= "ESP_Animated" then
+                    local sizeOffset = 0
+                    if ESP.AnimType == "Pulse" then
+                        sizeOffset = math.sin(t * 2) * 0.2 * ESP.AnimIntensity
+                    elseif ESP.AnimType == "Wave" then
+                        sizeOffset = math.sin(t * 1.5 + player.UserId) * 0.3 * ESP.AnimIntensity
+                    elseif ESP.AnimType == "Bounce" then
+                        sizeOffset = math.abs(math.sin(t * 2)) * 0.4 * ESP.AnimIntensity
+                    elseif ESP.AnimType == "Glitch" then
+                        if math.random(1, 30) == 1 then
+                            sizeOffset = 0.8 * ESP.AnimIntensity
+                        end
+                    end
+                    
+                    local baseSize = obj.Adornee and obj.Adornee.Size or Vector3.new(2, 2, 2)
+                    obj.Size = baseSize + Vector3.new(0.5 + sizeOffset, 0.5 + sizeOffset, 0.5 + sizeOffset)
+                end
+                
+                if obj:IsA("BoxHandleAdornment") or obj:IsA("SelectionBox") then
+                    if ESP.AnimType == "Pulse" then
+                        local pulse = math.sin(t * 2) * 0.15 + 0.5
+                        obj.Transparency = math.clamp(ESP.BoxTransparency + (1 - pulse) * 0.2, 0, 1)
+                    elseif ESP.AnimType == "Wave" then
+                        local wave = math.sin(t * 1.5 + player.UserId * 0.1) * 0.15 + 0.5
+                        obj.Transparency = math.clamp(ESP.BoxTransparency + (1 - wave) * 0.2, 0, 1)
+                    end
+                end
+                
+                if obj:IsA("Part") and obj.Name == "HeadDot" then
+                    if ESP.AnimType == "Pulse" then
+                        local pulse = math.sin(t * 2) * 0.2 + 0.8
+                        obj.Size = Vector3.new(0.4 * pulse, 0.4 * pulse, 0.4 * pulse)
+                    elseif ESP.AnimType == "Spin" then
+                        obj.CFrame = obj.CFrame * CFrame.Angles(0, 0.05 * ESP.AnimSpeed, 0)
+                    end
+                end
+            end
+            
+            -- 距離更新
+            if ESP.ShowDistance then
+                local dist = myHrp and math.floor((hrp.Position - myHrp.Position).Magnitude) or 0
+                for _, obj in pairs(data) do
+                    if obj:IsA("BillboardGui") and obj:FindFirstChild("TextLabel") then
+                        local label = obj:FindFirstChild("TextLabel")
+                        if label and label.Text:match("m$") then
+                            label.Text = dist .. "m"
+                        end
+                    end
+                end
+            end
+            
+            -- 体力更新
+            if ESP.ShowHealth then
+                local healthPercent = hum.Health / hum.MaxHealth
+                local healthColor = healthPercent > 0.5 and ESP.HealthColorGood or ESP.HealthColorBad
+                
+                for _, obj in pairs(data) do
+                    if obj:IsA("Frame") and obj.Parent and obj.Parent:IsA("BillboardGui") then
+                        local fill = obj:FindFirstChildWhichIsA("Frame")
+                        if fill then
+                            fill.Size = UDim2.new(healthPercent, 0, 1, 0)
+                            fill.BackgroundColor3 = healthColor
+                        end
+                        obj.BackgroundColor3 = healthColor
+                    end
+                end
+            end
+            
+            -- ヘッドドット追従
+            if ESP.ShowHeadDot and head then
+                for _, obj in pairs(data) do
+                    if obj:IsA("Part") and obj.Name == "HeadDot" then
+                        obj.CFrame = head.CFrame
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ESP制御
+local function UpdateAllESP()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            UpdatePlayerESP(player)
+        end
+    end
+end
+
+local function EnableESP()
+    ESP.Enabled = true
+    UpdateAllESP()
+    StartESPUpdater()
+    
+    Players.PlayerAdded:Connect(function(player)
+        if ESP.Enabled then
+            player.CharacterAdded:Connect(function()
+                task.wait(0.5)
+                if ESP.Enabled then
+                    UpdatePlayerESP(player)
+                end
+            end)
+            task.wait(0.5)
+            if ESP.Enabled then
+                UpdatePlayerESP(player)
+            end
+        end
+    end)
+    
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            player.CharacterAdded:Connect(function()
+                task.wait(0.5)
+                if ESP.Enabled then
+                    UpdatePlayerESP(player)
+                end
+            end)
+        end
+    end
+end
+
+local function DisableESP()
+    ESP.Enabled = false
+    if ESP.ESPConn then
+        ESP.ESPConn:Disconnect()
+        ESP.ESPConn = nil
+    end
+    for player, data in pairs(ESP.ESPData) do
+        for _, obj in pairs(data) do
+            if obj and obj.Parent then
+                obj:Destroy()
+            end
+        end
+    end
+    ESP.ESPData = {}
+end
+
+-- ============================================================================
+-- Visuals タブ - UI
+-- ============================================================================
+
+ESPMain:AddToggle("ESPMain", {
+    Text = "Enable Animation ESP",
+    Tooltip = "アニメーションESPを起動",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            EnableESP()
+            Library:Notify("Animation ESP", "Activated!", 2)
+        else
+            DisableESP()
+            Library:Notify("Animation ESP", "Deactivated", 2)
+        end
+    end
+})
+
+ESPMain:AddDivider()
+
+ESPAnim:AddDropdown("AnimType", {
+    Values = { "Pulse", "Wave", "Spin", "Bounce", "Glitch", "Flow" },
+    Default = "Pulse",
+    Text = "Animation Style",
+    Tooltip = "ESPのアニメーションを選択",
+    Callback = function(Value)
+        ESP.AnimType = Value
+    end
+})
+
+ESPAnim:AddSlider("AnimSpeed", {
+    Text = "Animation Speed",
+    Default = 10,
+    Min = 1,
+    Max = 30,
+    Rounding = 0,
+    Suffix = "x",
+    Callback = function(Value)
+        ESP.AnimSpeed = Value / 10
+    end
+})
+
+ESPAnim:AddSlider("AnimIntensity", {
+    Text = "Animation Intensity",
+    Default = 10,
+    Min = 1,
+    Max = 20,
+    Rounding = 0,
+    Suffix = "%",
+    Callback = function(Value)
+        ESP.AnimIntensity = Value / 10
+    end
+})
+
+ESPAnim:AddDivider()
+ESPAnim:AddLabel("=== Animation Guide ===")
+ESPAnim:AddLabel("Pulse  : ゆっくり明滅")
+ESPAnim:AddLabel("Wave   : 波のように動く")
+ESPAnim:AddLabel("Spin   : 回転する")
+ESPAnim:AddLabel("Bounce : バウンド")
+ESPAnim:AddLabel("Glitch : バグったように点滅")
+ESPAnim:AddLabel("Flow   : 色が流れる")
+
+ESPDesign:AddDropdown("BoxType", {
+    Values = { "Glow", "Neon", "Cyber", "Minimal", "Gradient" },
+    Default = "Glow",
+    Text = "Box Style",
+    Callback = function(Value)
+        ESP.BoxType = Value
+        if ESP.Enabled then
+            UpdateAllESP()
+        end
+    end
+})
+
+ESPDesign:AddLabel("Primary Color")
+    :AddColorPicker("BoxColor1", {
+        Default = Color3.fromRGB(0, 150, 255),
+        Title = "Primary Color",
+        Transparency = 0,
+        Callback = function(Value)
+            ESP.BoxColor1 = Value
+            if ESP.Enabled then
+                UpdateAllESP()
+            end
+        end
+    })
+
+ESPDesign:AddLabel("Secondary Color")
+    :AddColorPicker("BoxColor2", {
+        Default = Color3.fromRGB(200, 0, 255),
+        Title = "Secondary Color",
+        Transparency = 0,
+        Callback = function(Value)
+            ESP.BoxColor2 = Value
+            if ESP.Enabled then
+                UpdateAllESP()
+            end
+        end
+    })
+
+ESPDesign:AddSlider("BoxTransparency", {
+    Text = "Opacity",
+    Default = 30,
+    Min = 0,
+    Max = 100,
+    Rounding = 0,
+    Suffix = "%",
+    Callback = function(Value)
+        ESP.BoxTransparency = Value / 100
+        if ESP.Enabled then
+            UpdateAllESP()
+        end
+    end
+})
+
+ESPDesign:AddDivider()
+
+ESPMain:AddToggle("ShowName", {
+    Text = "Show Name",
+    Default = true,
+    Callback = function(Value)
+        ESP.ShowName = Value
+        if ESP.Enabled then
+            UpdateAllESP()
+        end
+    end
+})
+
+ESPMain:AddToggle("ShowDistance", {
+    Text = "Show Distance",
+    Default = true,
+    Callback = function(Value)
+        ESP.ShowDistance = Value
+        if ESP.Enabled then
+            UpdateAllESP()
+        end
+    end
+})
+
+ESPMain:AddToggle("ShowHealth", {
+    Text = "Show Health Bar",
+    Default = true,
+    Callback = function(Value)
+        ESP.ShowHealth = Value
+        if ESP.Enabled then
+            UpdateAllESP()
+        end
+    end
+})
+
+ESPMain:AddToggle("ShowStatus", {
+    Text = "Show Status",
+    Default = true,
+    Callback = function(Value)
+        ESP.ShowStatus = Value
+        if ESP.Enabled then
+            UpdateAllESP()
+        end
+    end
+})
+
+ESPMain:AddToggle("ShowHeadDot", {
+    Text = "Head Dot",
+    Default = true,
+    Callback = function(Value)
+        ESP.ShowHeadDot = Value
+        if ESP.Enabled then
+            UpdateAllESP()
+        end
+    end
+})
+
+ESPMain:AddToggle("RainbowMode", {
+    Text = "Rainbow Mode",
+    Default = false,
+    Callback = function(Value)
+        ESP.RainbowMode = Value
+        if ESP.Enabled then
+            UpdateAllESP()
+        end
+    end
+})
+
+ESPMain:AddToggle("UseTeamColor", {
+    Text = "Team Color",
+    Default = false,
+    Callback = function(Value)
+        ESP.UseTeamColor = Value
+        if ESP.Enabled then
+            UpdateAllESP()
+        end
+    end
+})
+
+ESPDesign:AddLabel("Name Color")
+    :AddColorPicker("NameColor", {
+        Default = Color3.fromRGB(255, 255, 255),
+        Title = "Name Color",
+        Transparency = 0,
+        Callback = function(Value)
+            ESP.NameColor = Value
+            if ESP.Enabled then
+                UpdateAllESP()
+            end
+        end
+    })
+
+ESPDesign:AddLabel("Distance Color")
+    :AddColorPicker("DistanceColor", {
+        Default = Color3.fromRGB(0, 255, 200),
+        Title = "Distance Color",
+        Transparency = 0,
+        Callback = function(Value)
+            ESP.DistanceColor = Value
+            if ESP.Enabled then
+                UpdateAllESP()
+            end
+        end
+    })
+
+ESPDesign:AddLabel("Health Color (Good)")
+    :AddColorPicker("HealthColorGood", {
+        Default = Color3.fromRGB(0, 255, 100),
+        Title = "Health Color (Good)",
+        Transparency = 0,
+        Callback = function(Value)
+            ESP.HealthColorGood = Value
+            if ESP.Enabled then
+                UpdateAllESP()
+            end
+        end
+    })
+
+ESPDesign:AddLabel("Health Color (Bad)")
+    :AddColorPicker("HealthColorBad", {
+        Default = Color3.fromRGB(255, 50, 50),
+        Title = "Health Color (Bad)",
+        Transparency = 0,
+        Callback = function(Value)
+            ESP.HealthColorBad = Value
+            if ESP.Enabled then
+                UpdateAllESP()
+            end
+        end
+    })
+
+-- ============================================================================
+-- Keybinds タブ
 -- ============================================================================
 KeybindGroup:AddKeyPicker("PlatformTPKey", {
     Default = "X",
@@ -1112,10 +1834,8 @@ KeybindGroup:AddLabel("X = Platform TP")
 KeybindGroup:AddLabel("RightShift = Menu Toggle")
 
 -- ============================================================================
--- 11. UI Settings
+-- UI Settings タブ
 -- ============================================================================
-local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
-
 MenuGroup:AddToggle("KeybindMenuOpen", {
     Default = Library.KeybindFrame.Visible,
     Text = "Open Keybind Menu",
@@ -1167,29 +1887,16 @@ SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
 
-ThemeManager:SetFolder("XOCU_Defense")
-SaveManager:SetFolder("XOCU_Defense/settings")
+ThemeManager:SetFolder("XOCU_Elite")
+SaveManager:SetFolder("XOCU_Elite/settings")
 
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 
 SaveManager:LoadAutoloadConfig()
 
--- ============================================================================
--- 初期化完了
--- ============================================================================
-print("XOCU Defense loaded successfully!")
-print("Features:")
-print("Defense:")
-print("  - Anti Loop Kill")
-print("  - Anti Lag")
-print("  - Platform TP (X)")
-print("  - Anti Grab [BEST]")
-print("  - Anti Void")
-print("  - Anti Gucci (Blobman)")
-print("  - Anti Kick (Shuriken/Item)")
-print("Attack:")
-print("  - Loop Kill (Auto/Quick)")
-print("Keybinds:")
-print("  - X = Platform TP")
-print("  - RightShift = Menu Toggle")
+print("XOCU ELITE - Full Version loaded!")
+print("Defense: Anti Loop Kill, Anti Lag, Platform TP, Anti Grab, Anti Void, Anti Gucci, Anti Kick")
+print("Attack: Loop Kill, Quick Kill, Target Select")
+print("Visuals: Animation ESP (6 styles)")
+print("Keybinds: X = Platform TP, RightShift = Menu")
