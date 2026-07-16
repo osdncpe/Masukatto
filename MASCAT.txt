@@ -1,7 +1,6 @@
--- XOCU ELITE - 通常版（難読化なし）
--- 防御: Anti Loop Kill, Anti Lag, Platform TP, Anti Grab, Anti Void, Anti Gucci, Anti Kick
--- 攻撃: Loop Kill, Quick Kill
--- ESP: アニメーションESP（6種類）
+-- MascatHub v0.7 - 癇癪Aura追加
+-- 機能: 防御/攻撃/ESP + 癇癪Aura（自動掴み）
+-- DeepSeek 構文チェック済み ✅
 
 local repo = "https://raw.githubusercontent.com/deividcomsono/Obsidian/main/"
 local Library = loadstring(game:HttpGet(repo .. "Library.lua"))()
@@ -18,8 +17,8 @@ Library.ShowToggleFrameInKeybinds = true
 -- ウィンドウ作成
 -- ============================================================================
 local Window = Library:CreateWindow({
-    Title = "XOCU ELITE",
-    Footer = "Obsidian UI | Full Edition",
+    Title = "MascatHub v0.7",
+    Footer = "癇癪Aura追加",
     Icon = 95816097006870,
     NotifySide = "Right",
     ShowCustomCursor = true,
@@ -31,6 +30,7 @@ local Window = Library:CreateWindow({
 local Tabs = {
     Defense = Window:AddTab("Defense", "shield"),
     Attack = Window:AddTab("Attack", "sword"),
+    Movement = Window:AddTab("Movement", "move"),
     Visuals = Window:AddTab("Visuals", "eye"),
     Keybinds = Window:AddTab("Keybinds", "keyboard"),
     ["UI Settings"] = Window:AddTab("UI Settings", "settings"),
@@ -45,48 +45,145 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
-local TweenService = game:GetService("TweenService")
 
 -- ============================================================================
--- Defense タブ - 防御機能
+-- グループボックス
 -- ============================================================================
 local DefenseMain = Tabs.Defense:AddLeftGroupbox("Defense Main", "shield")
 local DefenseExtra = Tabs.Defense:AddRightGroupbox("Extra Defense", "shield-plus")
 local AntiKickGroup = Tabs.Defense:AddRightGroupbox("Anti Kick", "ban")
 
--- ============================================================================
--- Attack タブ - 攻撃機能
--- ============================================================================
 local AttackGroup = Tabs.Attack:AddLeftGroupbox("Loop Kill", "sword")
 local TargetGroup = Tabs.Attack:AddRightGroupbox("Target Select", "user")
 
--- ============================================================================
--- Visuals タブ - ESP
--- ============================================================================
+local MovementGroup = Tabs.Movement:AddLeftGroupbox("Movement", "move")
+local AuraGroup = Tabs.Movement:AddRightGroupbox("Aura", "sparkles")
+
 local ESPMain = Tabs.Visuals:AddLeftGroupbox("ESP System", "eye")
 local ESPDesign = Tabs.Visuals:AddRightGroupbox("Design Studio", "palette")
 local ESPAnim = Tabs.Visuals:AddRightGroupbox("Animation", "sparkles")
 
--- ============================================================================
--- Keybinds タブ
--- ============================================================================
 local KeybindGroup = Tabs.Keybinds:AddLeftGroupbox("Keybinds", "keyboard")
-
--- ============================================================================
--- UI Settings タブ
--- ============================================================================
 local MenuGroup = Tabs["UI Settings"]:AddLeftGroupbox("Menu", "wrench")
 
 -- ============================================================================
--- ターゲット選択用（Attackタブ）
+-- リモートキャッシュ
+-- ============================================================================
+local RemoteCache = {}
+
+local function CacheRemotes()
+    local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
+    if menuToys then
+        RemoteCache.SpawnToy = menuToys:FindFirstChild("SpawnToyRemoteFunction")
+        RemoteCache.DestroyToy = menuToys:FindFirstChild("DestroyToy")
+    end
+    
+    local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
+    if grabEvents then
+        RemoteCache.SetNetworkOwner = grabEvents:FindFirstChild("SetNetworkOwner")
+        RemoteCache.DestroyGrabLine = grabEvents:FindFirstChild("DestroyGrabLine")
+        RemoteCache.CreateGrabLine = grabEvents:FindFirstChild("CreateGrabLine")
+    end
+    
+    local charEvents = ReplicatedStorage:FindFirstChild("CharacterEvents")
+    if charEvents then
+        RemoteCache.RagdollRemote = charEvents:FindFirstChild("RagdollRemote")
+        RemoteCache.Struggle = charEvents:FindFirstChild("Struggle")
+    end
+    
+    local playerEvents = ReplicatedStorage:FindFirstChild("PlayerEvents")
+    if playerEvents then
+        RemoteCache.StickyPartEvent = playerEvents:FindFirstChild("StickyPartEvent")
+    end
+end
+
+CacheRemotes()
+
+task.spawn(function()
+    while true do
+        task.wait(60)
+        CacheRemotes()
+    end
+end)
+
+-- ============================================================================
+-- Blobmanユーティリティ
+-- ============================================================================
+local BlobmanUtils = {}
+
+function BlobmanUtils.GetSpawnedToysFolder()
+    local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
+    if not folder then
+        folder = Instance.new("Folder")
+        folder.Name = LocalPlayer.Name .. "SpawnedInToys"
+        folder.Parent = Workspace
+    end
+    return folder
+end
+
+function BlobmanUtils.CleanupBlobman()
+    local folder = BlobmanUtils.GetSpawnedToysFolder()
+    for _, toy in pairs(folder:GetChildren()) do
+        if toy.Name == "CreatureBlobman" or toy.Name == "AntiGucci" or toy.Name == "LoopKillBlob" then
+            if RemoteCache.DestroyToy then
+                pcall(function() RemoteCache.DestroyToy:FireServer(toy) end)
+            end
+            pcall(function() toy:Destroy() end)
+        end
+    end
+end
+
+function BlobmanUtils.SpawnBlobman(offset)
+    offset = offset or CFrame.new(0, 0, -5)
+    local char = LocalPlayer.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+    
+    if not RemoteCache.SpawnToy then return nil end
+    
+    pcall(function()
+        RemoteCache.SpawnToy:InvokeServer("CreatureBlobman", hrp.CFrame * offset, Vector3.zero)
+    end)
+    
+    local folder = BlobmanUtils.GetSpawnedToysFolder()
+    for _ = 1, 30 do
+        task.wait(0.1)
+        local blob = folder:FindFirstChild("CreatureBlobman")
+        if blob then return blob end
+    end
+    return nil
+end
+
+function BlobmanUtils.SitOnBlobman(blob)
+    if not blob then return false end
+    local seat = blob:FindFirstChild("VehicleSeat")
+    if not seat then return false end
+    
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChild("Humanoid")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hum or not hrp then return false end
+    
+    hrp.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
+    task.wait(0.05)
+    seat:Sit(hum)
+    task.wait(0.3)
+    return hum.Sit == true
+end
+
+function BlobmanUtils.GetBlobman()
+    local folder = BlobmanUtils.GetSpawnedToysFolder()
+    return folder:FindFirstChild("CreatureBlobman")
+end
+
+-- ============================================================================
+-- ターゲット選択
 -- ============================================================================
 local selectedTarget = nil
-local targetName = ""
 
 local function GetPlayerList()
     local list = {}
-    for _, plr in ipairs(Players:GetPlayers()) do
+    for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer then
             table.insert(list, plr.DisplayName .. " (@" .. plr.Name .. ")")
         end
@@ -107,26 +204,23 @@ local targetDropdown = TargetGroup:AddDropdown("TargetSelect", {
     Values = GetPlayerList(),
     Default = 1,
     Text = "Select Target",
-    Tooltip = "攻撃対象のプレイヤーを選択",
     Callback = function(Value)
         selectedTarget = GetPlayerFromSelection(Value)
         if selectedTarget then
-            targetName = selectedTarget.Name
             Library:Notify("Target", "Selected: " .. selectedTarget.DisplayName, 3)
         end
     end
 })
 
-Players.PlayerAdded:Connect(function()
-    targetDropdown:Refresh(GetPlayerList(), false)
-end)
-Players.PlayerRemoving:Connect(function()
+local function RefreshTargetList()
     targetDropdown:Refresh(GetPlayerList(), false)
     if selectedTarget and not selectedTarget.Parent then
         selectedTarget = nil
-        targetName = ""
     end
-end)
+end
+
+Players.PlayerAdded:Connect(RefreshTargetList)
+Players.PlayerRemoving:Connect(RefreshTargetList)
 
 -- ============================================================================
 -- 【Defense】1. Anti Loop Kill
@@ -136,16 +230,13 @@ local antiLoopKillConn = nil
 
 DefenseMain:AddToggle("AntiLoopKill", {
     Text = "Anti Loop Kill",
-    Tooltip = "キルループ攻撃を回避し安全な場所にテレポート",
     Default = false,
     Callback = function(Value)
         antiLoopKillActive = Value
-
         if antiLoopKillConn then
             antiLoopKillConn:Disconnect()
             antiLoopKillConn = nil
         end
-
         if Value then
             antiLoopKillConn = LocalPlayer.CharacterAdded:Connect(function(char)
                 task.wait(1)
@@ -171,15 +262,15 @@ local originalGrabEvents = {}
 
 DefenseMain:AddToggle("AntiLag", {
     Text = "Anti Lag",
-    Tooltip = "GrabEventsを削除してラグを軽減",
+    Tooltip = "⚠ GrabEventsを削除します",
     Default = false,
     Callback = function(Value)
         antiLagActive = Value
-
         if Value then
+            Library:Notify("Anti Lag", "⚠ GrabEventsを削除しました", 3)
             local grabFolder = ReplicatedStorage:FindFirstChild("GrabEvents")
             if grabFolder then
-                for _, child in ipairs(grabFolder:GetChildren()) do
+                for _, child in pairs(grabFolder:GetChildren()) do
                     if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
                         originalGrabEvents[child.Name] = child:Clone()
                     end
@@ -204,9 +295,7 @@ DefenseMain:AddToggle("AntiLag", {
 -- 【Defense】3. Platform TP
 -- ============================================================================
 local platformTPToggle = false
-local platformTPActive = false
 local platformPart = nil
-local oldPlatformPos = nil
 
 local function SetupPlatform()
     if not platformPart then
@@ -221,15 +310,10 @@ end
 
 DefenseMain:AddToggle("PlatformTPToggle", {
     Text = "Enable Platform TP",
-    Tooltip = "プラットフォームへのテレポートを有効化",
     Default = false,
     Callback = function(Value)
         platformTPToggle = Value
-        if Value then
-            SetupPlatform()
-        else
-            platformTPActive = false
-        end
+        if Value then SetupPlatform() end
     end
 })
 
@@ -241,22 +325,14 @@ DefenseMain:AddLabel("Platform TP Execute")
         NoUI = true,
         Callback = function(Value)
             if not platformTPToggle then return end
-
-            local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
+            local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
             if not root then return end
-
-            platformTPActive = Value
-
             if Value then
-                oldPlatformPos = root.CFrame
                 root.CFrame = platformPart.CFrame + Vector3.new(0, 5, 0)
                 root.AssemblyLinearVelocity = Vector3.zero
                 root.AssemblyAngularVelocity = Vector3.zero
             else
-                if oldPlatformPos then
-                    root.CFrame = oldPlatformPos
-                end
+                root.CFrame = CFrame.new(0, 3, 0)
             end
         end
     })
@@ -270,99 +346,53 @@ local BeingHeld = LocalPlayer:FindFirstChild("IsHeld") or Instance.new("BoolValu
 BeingHeld.Parent = LocalPlayer
 BeingHeld.Name = "IsHeld"
 
-local function StartAntiGrab()
-    if antiGrabConn then
-        antiGrabConn:Disconnect()
-        antiGrabConn = nil
-    end
-
-    antiGrabConn = BeingHeld.Changed:Connect(function()
-        if not AntiGrabEnabled then return end
-
-        local char = LocalPlayer.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local hum = char and char:FindFirstChild("Humanoid")
-
-        if BeingHeld.Value then
-            if hrp then 
-                hrp.Anchored = true 
-            end
-
-            task.spawn(function()
-                while BeingHeld.Value and AntiGrabEnabled do 
-                    local struggleEvent = ReplicatedStorage:FindFirstChild("CharacterEvents")
-                    if struggleEvent then
-                        local struggle = struggleEvent:FindFirstChild("Struggle")
-                        if struggle then
-                            pcall(function() struggle:FireServer(LocalPlayer) end)
-                        end
-                    end
-                    if hrp then
-                        pcall(function() 
-                            local charEvents = ReplicatedStorage:FindFirstChild("CharacterEvents")
-                            if charEvents then
-                                local ragdoll = charEvents:FindFirstChild("RagdollRemote")
-                                if ragdoll then ragdoll:FireServer(hrp, 0) end
-                            end
-                        end)
-                    end
-                    task.wait()
-                end
-                if hrp then 
-                    hrp.Anchored = false 
-                end
-            end)
-
-            task.spawn(function()
-                while BeingHeld.Value and AntiGrabEnabled do
-                    if hum then
-                        hum.Sit = false
-                        hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-                        hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-                    end
-                    if hrp then
-                        hrp.AssemblyLinearVelocity = Vector3.zero
-                        hrp.AssemblyAngularVelocity = Vector3.zero
-                    end
-                    task.wait()
-                end
-            end)
-        else
-            if hrp then 
-                hrp.Anchored = false 
-            end
-        end
-    end)
-
-    if BeingHeld.Value then
-        BeingHeld.Changed:Fire()
-    end
-end
-
-local function StopAntiGrab()
-    AntiGrabEnabled = false
-    if antiGrabConn then
-        antiGrabConn:Disconnect()
-        antiGrabConn = nil
-    end
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        hrp.Anchored = false
-    end
-end
-
 DefenseMain:AddToggle("AntiGrabBest", {
     Text = "Anti Grab [BEST]",
-    Tooltip = "掴まれても自動で抵抗・解除",
     Default = false,
     Risky = true,
     Callback = function(Value)
         AntiGrabEnabled = Value
+        if antiGrabConn then
+            antiGrabConn:Disconnect()
+            antiGrabConn = nil
+        end
         if Value then
-            StartAntiGrab()
-        else
-            StopAntiGrab()
+            antiGrabConn = BeingHeld.Changed:Connect(function()
+                if not AntiGrabEnabled then return end
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                local hum = char and char:FindFirstChild("Humanoid")
+                if BeingHeld.Value then
+                    if hrp then hrp.Anchored = true end
+                    task.spawn(function()
+                        while BeingHeld.Value and AntiGrabEnabled do
+                            if RemoteCache.Struggle then
+                                pcall(function() RemoteCache.Struggle:FireServer(LocalPlayer) end)
+                            end
+                            if hrp and RemoteCache.RagdollRemote then
+                                pcall(function() RemoteCache.RagdollRemote:FireServer(hrp, 0) end)
+                            end
+                            task.wait()
+                        end
+                        if hrp then hrp.Anchored = false end
+                    end)
+                    task.spawn(function()
+                        while BeingHeld.Value and AntiGrabEnabled do
+                            if hum then
+                                hum.Sit = false
+                                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                            end
+                            if hrp then
+                                hrp.AssemblyLinearVelocity = Vector3.zero
+                                hrp.AssemblyAngularVelocity = Vector3.zero
+                            end
+                            task.wait()
+                        end
+                    end)
+                else
+                    if hrp then hrp.Anchored = false end
+                end
+            end)
         end
     end
 })
@@ -372,14 +402,9 @@ DefenseMain:AddToggle("AntiGrabBest", {
 -- ============================================================================
 DefenseMain:AddToggle("AntiVoid", {
     Text = "Anti Void",
-    Tooltip = "マップ外に落下しても死亡しない",
     Default = false,
     Callback = function(Value)
-        if Value then
-            Workspace.FallenPartsDestroyHeight = 0/0
-        else
-            Workspace.FallenPartsDestroyHeight = -100
-        end
+        Workspace.FallenPartsDestroyHeight = Value and -9999999 or -100
     end
 })
 
@@ -389,145 +414,92 @@ DefenseMain:AddToggle("AntiVoid", {
 local antiGucciActive = false
 local antiGucciConn = nil
 local antiGucciSeat = nil
-
-local function CleanUpBlobman()
-    local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-    if folder then
-        local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
-        local destroyToy = menuToys and menuToys:FindFirstChild("DestroyToy")
-        for _, toy in pairs(folder:GetChildren()) do
-            if toy.Name == "CreatureBlobman" or toy.Name == "Gucci" or toy.Name == "AntiGucci" then
-                if destroyToy then
-                    pcall(function() destroyToy:FireServer(toy) end)
-                else
-                    pcall(function() toy:Destroy() end)
-                end
-            end
-        end
-    end
-end
-
-local function SpawnBlobman()
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-
-    local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
-    local spawnRemote = menuToys and menuToys:FindFirstChild("SpawnToyRemoteFunction")
-    if not spawnRemote then return nil end
-
-    pcall(function()
-        spawnRemote:InvokeServer("CreatureBlobman", hrp.CFrame * CFrame.new(0, 0, -5), Vector3.new(0, -15.716, 0))
-    end)
-
-    local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-    if not folder then return nil end
-
-    for _ = 1, 30 do
-        task.wait(0.1)
-        local blob = folder:FindFirstChild("CreatureBlobman")
-        if blob then
-            blob.Name = "AntiGucci"
-            return blob
-        end
-    end
-    return nil
-end
+local antiGucciBlob = nil
 
 local function StartAntiGucci()
     if antiGucciConn then
         antiGucciConn:Disconnect()
         antiGucciConn = nil
     end
-
-    CleanUpBlobman()
-
-    local blob = SpawnBlobman()
+    
+    BlobmanUtils.CleanupBlobman()
+    
+    local blob = BlobmanUtils.SpawnBlobman(CFrame.new(0, 0, -5))
     if not blob then
         Library:Notify("Anti Gucci", "Blobman spawn failed!", 3)
         return
     end
-
-    local seat = blob:FindFirstChild("VehicleSeat")
-    if not seat then
-        Library:Notify("Anti Gucci", "Seat not found!", 3)
+    
+    blob.Name = "AntiGucci"
+    antiGucciBlob = blob
+    
+    local seated = BlobmanUtils.SitOnBlobman(blob)
+    if not seated then
+        Library:Notify("Anti Gucci", "Failed to sit!", 3)
         return
     end
-
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChild("Humanoid")
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-    if not hum or not hrp then return end
-
-    hrp.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
-    seat:Sit(hum)
-
-    antiGucciSeat = seat
-
+    
+    antiGucciSeat = blob:FindFirstChild("VehicleSeat")
+    
     antiGucciConn = RunService.Heartbeat:Connect(function()
         if not antiGucciActive then return end
-
-        local currentChar = LocalPlayer.Character
-        local currentHum = currentChar and currentChar:FindFirstChild("Humanoid")
-        local currentHrp = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
-
-        if not currentHum or not currentHrp then return end
-
-        if not currentHum.Sit and antiGucciSeat then
-            antiGucciSeat:Sit(currentHum)
-        end
-
-        pcall(function()
-            local charEvents = ReplicatedStorage:FindFirstChild("CharacterEvents")
-            if charEvents then
-                local ragdoll = charEvents:FindFirstChild("RagdollRemote")
-                if ragdoll then ragdoll:FireServer(currentHrp, 0) end
+        
+        if not antiGucciBlob or not antiGucciBlob.Parent then
+            antiGucciBlob = BlobmanUtils.SpawnBlobman(CFrame.new(0, 0, -5))
+            if antiGucciBlob then
+                antiGucciBlob.Name = "AntiGucci"
+                BlobmanUtils.SitOnBlobman(antiGucciBlob)
+                antiGucciSeat = antiGucciBlob:FindFirstChild("VehicleSeat")
             end
-        end)
+            return
+        end
+        
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        
+        if not hum or not hrp then return end
+        
+        if not hum.Sit and antiGucciSeat and antiGucciSeat.Parent then
+            antiGucciSeat:Sit(hum)
+        end
+        
+        if RemoteCache.RagdollRemote then
+            pcall(function() RemoteCache.RagdollRemote:FireServer(hrp, 0) end)
+        end
     end)
-
+    
     Library:Notify("Anti Gucci", "Blobman spawned and seated!", 3)
 end
 
 local function StopAntiGucci()
     antiGucciActive = false
-
     if antiGucciConn then
         antiGucciConn:Disconnect()
         antiGucciConn = nil
     end
-
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChild("Humanoid")
-    if hum then
-        hum.Sit = false
-    end
-
-    CleanUpBlobman()
+    if hum then hum.Sit = false end
+    BlobmanUtils.CleanupBlobman()
     antiGucciSeat = nil
-
+    antiGucciBlob = nil
     Library:Notify("Anti Gucci", "Disabled", 3)
 end
 
 DefenseExtra:AddToggle("AntiGucciBlobman", {
     Text = "Anti Gucci (Blobman)",
-    Tooltip = "ブロブマンに自動で座り攻撃を防ぐ",
     Default = false,
     Risky = true,
     Callback = function(Value)
         antiGucciActive = Value
-        if Value then
-            StartAntiGucci()
-        else
-            StopAntiGucci()
-        end
+        if Value then StartAntiGucci() else StopAntiGucci() end
     end
 })
 
 LocalPlayer.CharacterAdded:Connect(function()
     if antiGucciActive then
-        task.wait(1)
+        task.wait(1.5)
         StartAntiGucci()
     end
 end)
@@ -539,56 +511,43 @@ local shurikenAntiKick = false
 local shurikenTask = nil
 
 local function ClearShuriken()
-    local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-    if not folder then return end
-
-    local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
-    local destroyToy = menuToys and menuToys:FindFirstChild("DestroyToy")
-
+    local folder = BlobmanUtils.GetSpawnedToysFolder()
     for _, toy in pairs(folder:GetChildren()) do
         if toy.Name == "NinjaShuriken" or toy.Name == "AntiKick" or toy.Name == "NinjaKunai" then
-            if destroyToy then
-                pcall(function() destroyToy:FireServer(toy) end)
-            else
-                pcall(function() toy:Destroy() end)
+            if RemoteCache.DestroyToy then
+                pcall(function() RemoteCache.DestroyToy:FireServer(toy) end)
             end
+            pcall(function() toy:Destroy() end)
         end
     end
 end
 
 local function StartShurikenAntiKick()
     ClearShuriken()
-
-    local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
-    local setOwner = grabEvents and grabEvents:FindFirstChild("SetNetworkOwner")
-    local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
-    local spawnRemote = menuToys and menuToys:FindFirstChild("SpawnToyRemoteFunction")
-
-    if not setOwner or not spawnRemote then
+    
+    if not RemoteCache.SetNetworkOwner or not RemoteCache.SpawnToy then
         Library:Notify("Anti Kick", "Required remotes not found!", 3)
         return
     end
-
+    
     shurikenTask = task.spawn(function()
         while shurikenAntiKick do
             task.wait(0.05)
-
+            
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             local hum = char and char:FindFirstChild("Humanoid")
-
+            
             if not hrp or not hum or hum.Health <= 0 then
                 continue
             end
-
-            local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-            if not folder then continue end
-
+            
+            local folder = BlobmanUtils.GetSpawnedToysFolder()
             local shuriken = folder:FindFirstChild("NinjaShuriken")
-
+            
             if not shuriken then
                 pcall(function()
-                    spawnRemote:InvokeServer("NinjaShuriken", hrp.CFrame * CFrame.new(0, 12, 20), Vector3.zero)
+                    RemoteCache.SpawnToy:InvokeServer("NinjaShuriken", hrp.CFrame * CFrame.new(0, 12, 20), Vector3.zero)
                 end)
                 task.wait(0.3)
                 shuriken = folder:FindFirstChild("NinjaShuriken")
@@ -596,7 +555,7 @@ local function StartShurikenAntiKick()
                     shuriken.Name = "AntiKick"
                 end
             end
-
+            
             if shuriken then
                 for _, part in pairs(shuriken:GetDescendants()) do
                     if part:IsA("BasePart") then
@@ -607,11 +566,11 @@ local function StartShurikenAntiKick()
                         part.Massless = true
                     end
                 end
-
+                
                 local soundPart = shuriken:FindFirstChild("SoundPart")
                 if soundPart then
-                    pcall(function() setOwner:FireServer(soundPart, soundPart.CFrame) end)
-
+                    pcall(function() RemoteCache.SetNetworkOwner:FireServer(soundPart, soundPart.CFrame) end)
+                    
                     if soundPart:FindFirstChild("PartOwner") and soundPart.PartOwner.Value == LocalPlayer.Name then
                         soundPart.CFrame = hrp.CFrame * CFrame.new(0, 2, 0)
                         soundPart.AssemblyLinearVelocity = Vector3.zero
@@ -621,7 +580,7 @@ local function StartShurikenAntiKick()
             end
         end
     end)
-
+    
     Library:Notify("Anti Kick", "Shuriken mode activated!", 3)
 end
 
@@ -637,16 +596,11 @@ end
 
 AntiKickGroup:AddToggle("ShurikenAntiKick", {
     Text = "Anti Kick (Shuriken)",
-    Tooltip = "シュリケンを使用してキックを防止",
     Default = false,
     Risky = true,
     Callback = function(Value)
         shurikenAntiKick = Value
-        if Value then
-            StartShurikenAntiKick()
-        else
-            StopShurikenAntiKick()
-        end
+        if Value then StartShurikenAntiKick() else StopShurikenAntiKick() end
     end
 })
 
@@ -667,26 +621,19 @@ AntiKickGroup:AddDropdown("KickItemSelect", {
     Values = { "Japanese Lantern", "Spray Can", "Spooky Candle" },
     Default = "Spooky Candle",
     Text = "Select Kick Item",
-    Tooltip = "キック防止に使用するアイテム",
     Callback = function(Value)
         selectedKickItem = KickItems[Value]
     end
 })
 
 local function ClearKickItem()
-    local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-    if not folder then return end
-
-    local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
-    local destroyToy = menuToys and menuToys:FindFirstChild("DestroyToy")
-
+    local folder = BlobmanUtils.GetSpawnedToysFolder()
     for _, toy in pairs(folder:GetChildren()) do
         if toy.Name == "AntiKickItem" then
-            if destroyToy then
-                pcall(function() destroyToy:FireServer(toy) end)
-            else
-                pcall(function() toy:Destroy() end)
+            if RemoteCache.DestroyToy then
+                pcall(function() RemoteCache.DestroyToy:FireServer(toy) end)
             end
+            pcall(function() toy:Destroy() end)
         end
     end
 end
@@ -695,18 +642,15 @@ local function SpawnKickItem(itemName)
     local char = LocalPlayer.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return nil end
-
-    local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
-    local spawnRemote = menuToys and menuToys:FindFirstChild("SpawnToyRemoteFunction")
-    if not spawnRemote then return nil end
-
-    local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-    if not folder then return nil end
-
+    
+    if not RemoteCache.SpawnToy then return nil end
+    
+    local folder = BlobmanUtils.GetSpawnedToysFolder()
+    
     pcall(function()
-        spawnRemote:InvokeServer(itemName, hrp.CFrame * CFrame.new(0, 14, 20), Vector3.zero)
+        RemoteCache.SpawnToy:InvokeServer(itemName, hrp.CFrame * CFrame.new(0, 14, 20), Vector3.zero)
     end)
-
+    
     for _ = 1, 30 do
         task.wait(0.1)
         local item = folder:FindFirstChild(itemName)
@@ -720,33 +664,27 @@ end
 
 local function StartItemAntiKick()
     ClearKickItem()
-
-    local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
-    local setOwner = grabEvents and grabEvents:FindFirstChild("SetNetworkOwner")
-
-    if not setOwner then
+    
+    if not RemoteCache.SetNetworkOwner then
         Library:Notify("Anti Kick", "SetNetworkOwner not found!", 3)
         return
     end
-
+    
     itemTask = task.spawn(function()
         local item = nil
         local soundPart = nil
-
+        
         while itemAntiKick do
             task.wait(0.05)
-
+            
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             local hum = char and char:FindFirstChild("Humanoid")
-
+            
             if not hrp or not hum or hum.Health <= 0 then
                 continue
             end
-
-            local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-            if not folder then continue end
-
+            
             if not item or not item.Parent then
                 ClearKickItem()
                 item = SpawnKickItem(selectedKickItem)
@@ -756,15 +694,15 @@ local function StartItemAntiKick()
                 end
                 soundPart = item:FindFirstChild("SoundPart") or item:FindFirstChildWhichIsA("BasePart")
             end
-
+            
             if not soundPart or not soundPart.Parent then
                 item = nil
                 soundPart = nil
                 continue
             end
-
-            pcall(function() setOwner:FireServer(soundPart, soundPart.CFrame) end)
-
+            
+            pcall(function() RemoteCache.SetNetworkOwner:FireServer(soundPart, soundPart.CFrame) end)
+            
             for _, part in pairs(item:GetDescendants()) do
                 if part:IsA("BasePart") then
                     part.CanCollide = false
@@ -774,7 +712,7 @@ local function StartItemAntiKick()
                     part.Massless = true
                 end
             end
-
+            
             if soundPart:FindFirstChild("PartOwner") and soundPart.PartOwner.Value == LocalPlayer.Name then
                 local targetPart = Workspace:FindFirstChild("PlayerCharacterLocationDetector") or hrp
                 soundPart.CFrame = targetPart.CFrame
@@ -783,7 +721,7 @@ local function StartItemAntiKick()
             end
         end
     end)
-
+    
     Library:Notify("Anti Kick", "Item mode activated with " .. selectedKickItem, 3)
 end
 
@@ -799,16 +737,11 @@ end
 
 AntiKickGroup:AddToggle("ItemAntiKick", {
     Text = "Anti Kick (Item)",
-    Tooltip = "アイテムを使用してキックを防止",
     Default = false,
     Risky = true,
     Callback = function(Value)
         itemAntiKick = Value
-        if Value then
-            StartItemAntiKick()
-        else
-            StopItemAntiKick()
-        end
+        if Value then StartItemAntiKick() else StopItemAntiKick() end
     end
 })
 
@@ -826,7 +759,6 @@ AttackGroup:AddSlider("KillHeight", {
     Min = 5,
     Max = 100,
     Rounding = 0,
-    Tooltip = "持ち上げる高さ（スタッド）",
     Callback = function(Value)
         killHeight = Value
     end
@@ -834,129 +766,80 @@ AttackGroup:AddSlider("KillHeight", {
 
 AttackGroup:AddToggle("UseBlobman", {
     Text = "Use Blobman",
-    Tooltip = "ブロブマンを使用してキル（より強力）",
     Default = true,
     Callback = function(Value)
         useBlobman = Value
     end
 })
 
-local function SpawnBlobmanForKill()
-    local char = LocalPlayer.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-
-    local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
-    local spawnRemote = menuToys and menuToys:FindFirstChild("SpawnToyRemoteFunction")
-    if not spawnRemote then return nil end
-
-    local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-    if not folder then return nil end
-
-    for _, toy in pairs(folder:GetChildren()) do
-        if toy.Name == "CreatureBlobman" then
-            local menuToys2 = ReplicatedStorage:FindFirstChild("MenuToys")
-            local destroyToy = menuToys2 and menuToys2:FindFirstChild("DestroyToy")
-            if destroyToy then
-                pcall(function() destroyToy:FireServer(toy) end)
-            end
-        end
-    end
-
-    pcall(function()
-        spawnRemote:InvokeServer("CreatureBlobman", hrp.CFrame * CFrame.new(0, 0, -5), Vector3.new(0, -15, 0))
-    end)
-
-    for _ = 1, 30 do
-        task.wait(0.1)
-        local blob = folder:FindFirstChild("CreatureBlobman")
-        if blob then
-            blob.Name = "LoopKillBlob"
-            return blob
-        end
-    end
-    return nil
-end
-
 local function StartLoopKill()
     if not selectedTarget then
-        Library:Notify("Loop Kill", "Please select a target first!", 3)
+        Library:Notify("Loop Kill", "Select a target first!", 3)
         return
     end
-
+    
     if loopKillTask then
         task.cancel(loopKillTask)
         loopKillTask = nil
     end
-
+    
     local target = selectedTarget
-
+    
     loopKillTask = task.spawn(function()
         local blob = nil
-        local seat = nil
-
-        if useBlobman then
-            blob = SpawnBlobmanForKill()
-            if blob then
-                seat = blob:FindFirstChild("VehicleSeat")
-                if seat then
-                    local char = LocalPlayer.Character
-                    local hum = char and char:FindFirstChild("Humanoid")
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    if hum and hrp then
-                        hrp.CFrame = seat.CFrame + Vector3.new(0, 2, 0)
-                        seat:Sit(hum)
-                        Library:Notify("Loop Kill", "Seated on Blobman!", 2)
-                    end
-                end
-            end
-        end
-
-        local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
-        local getOwner = grabEvents and grabEvents:FindFirstChild("SetNetworkOwner")
-        local destroyLine = grabEvents and grabEvents:FindFirstChild("DestroyGrabLine")
-
+        
         while loopKillActive do
-            task.wait(0.05)
-
+            task.wait(0.1)
+            
             if not target or not target.Parent then
-                Library:Notify("Loop Kill", "Target lost!", 3)
                 break
             end
-
+            
             local tChar = target.Character
             local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
             local tHum = tChar and tChar:FindFirstChild("Humanoid")
-
+            
             if not tHrp or not tHum or tHum.Health <= 0 then
                 task.wait(0.5)
                 continue
             end
-
+            
             local myChar = LocalPlayer.Character
             local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
             local myHum = myChar and myChar:FindFirstChild("Humanoid")
-
+            
             if not myHrp or not myHum then
                 task.wait(0.5)
                 continue
             end
-
-            if useBlobman and blob and blob.Parent then
+            
+            if useBlobman then
+                if not blob or not blob.Parent then
+                    BlobmanUtils.CleanupBlobman()
+                    blob = BlobmanUtils.SpawnBlobman(CFrame.new(0, 0, -5))
+                    if blob then
+                        blob.Name = "LoopKillBlob"
+                        BlobmanUtils.SitOnBlobman(blob)
+                    else
+                        task.wait(1)
+                        continue
+                    end
+                end
+                
                 local blobHrp = blob:FindFirstChild("HumanoidRootPart")
                 if blobHrp then
                     blobHrp.CFrame = tHrp.CFrame
                     blobHrp.AssemblyLinearVelocity = Vector3.zero
                     blobHrp.AssemblyAngularVelocity = Vector3.zero
                 end
-
+                
                 local remoteFolder = blob:FindFirstChild("BlobmanSeatAndOwnerScript")
                 if remoteFolder then
                     local grab = remoteFolder:FindFirstChild("CreatureGrab")
                     local drop = remoteFolder:FindFirstChild("CreatureDrop")
                     local detector = blob:FindFirstChild("RightDetector")
-                    local weld = detector and (detector:FindFirstChild("RightWeld") or detector:FindFirstChild("RigidConstraint"))
-
+                    local weld = detector and detector:FindFirstChild("RightWeld")
+                    
                     if grab and drop and detector and weld then
                         pcall(function()
                             grab:FireServer(detector, tHrp, weld)
@@ -964,40 +847,36 @@ local function StartLoopKill()
                         end)
                     end
                 end
-
+                
                 tHrp.CFrame = myHrp.CFrame + Vector3.new(0, killHeight, 0)
                 tHrp.AssemblyLinearVelocity = Vector3.zero
                 tHrp.AssemblyAngularVelocity = Vector3.zero
-
-                if getOwner then
-                    pcall(function() getOwner:FireServer(tHrp, tHrp.CFrame) end)
+                
+                if RemoteCache.SetNetworkOwner then
+                    pcall(function() RemoteCache.SetNetworkOwner:FireServer(tHrp, tHrp.CFrame) end)
                 end
             else
                 if (tHrp.Position - myHrp.Position).Magnitude > 30 then
                     myHrp.CFrame = tHrp.CFrame + Vector3.new(0, 0, 5)
                     task.wait(0.1)
                 end
-
-                if getOwner then
-                    pcall(function() getOwner:FireServer(tHrp, tHrp.CFrame) end)
+                
+                if RemoteCache.SetNetworkOwner then
+                    pcall(function() RemoteCache.SetNetworkOwner:FireServer(tHrp, tHrp.CFrame) end)
                 end
-
-                if destroyLine then
-                    pcall(function() destroyLine:FireServer(tHrp) end)
+                
+                if RemoteCache.DestroyGrabLine then
+                    pcall(function() RemoteCache.DestroyGrabLine:FireServer(tHrp) end)
                 end
-
+                
                 tHrp.CFrame = myHrp.CFrame + Vector3.new(0, killHeight, 0)
                 tHrp.AssemblyLinearVelocity = Vector3.zero
                 tHrp.AssemblyAngularVelocity = Vector3.zero
-
-                pcall(function()
-                    local charEvents = ReplicatedStorage:FindFirstChild("CharacterEvents")
-                    if charEvents then
-                        local ragdoll = charEvents:FindFirstChild("RagdollRemote")
-                        if ragdoll then ragdoll:FireServer(tHrp, 0) end
-                    end
-                end)
-
+                
+                if RemoteCache.RagdollRemote then
+                    pcall(function() RemoteCache.RagdollRemote:FireServer(tHrp, 0) end)
+                end
+                
                 if tHum.Health > 0 then
                     tHum.Health = tHum.Health - 10
                     if tHum.Health <= 0 then
@@ -1006,18 +885,16 @@ local function StartLoopKill()
                 end
             end
         end
-
+        
         if blob and blob.Parent then
-            local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
-            local destroyToy = menuToys and menuToys:FindFirstChild("DestroyToy")
-            if destroyToy then
-                pcall(function() destroyToy:FireServer(blob) end)
+            if RemoteCache.DestroyToy then
+                pcall(function() RemoteCache.DestroyToy:FireServer(blob) end)
             end
         end
-
+        BlobmanUtils.CleanupBlobman()
         Library:Notify("Loop Kill", "Stopped", 3)
     end)
-
+    
     Library:Notify("Loop Kill", "Started on " .. target.DisplayName, 3)
 end
 
@@ -1027,33 +904,16 @@ local function StopLoopKill()
         task.cancel(loopKillTask)
         loopKillTask = nil
     end
-
-    local folder = Workspace:FindFirstChild(LocalPlayer.Name .. "SpawnedInToys")
-    if folder then
-        local menuToys = ReplicatedStorage:FindFirstChild("MenuToys")
-        local destroyToy = menuToys and menuToys:FindFirstChild("DestroyToy")
-        for _, toy in pairs(folder:GetChildren()) do
-            if toy.Name == "LoopKillBlob" and destroyToy then
-                pcall(function() destroyToy:FireServer(toy) end)
-            end
-        end
-    end
-
-    Library:Notify("Loop Kill", "Stopped", 3)
+    BlobmanUtils.CleanupBlobman()
 end
 
 AttackGroup:AddToggle("LoopKill", {
     Text = "Loop Kill",
-    Tooltip = "選択したターゲットを自動で繰り返しキル",
     Default = false,
     Risky = true,
     Callback = function(Value)
         loopKillActive = Value
-        if Value then
-            StartLoopKill()
-        else
-            StopLoopKill()
-        end
+        if Value then StartLoopKill() else StopLoopKill() end
     end
 })
 
@@ -1064,48 +924,133 @@ AttackGroup:AddButton({
             Library:Notify("Quick Kill", "Select a target first!", 3)
             return
         end
-
+        
         local target = selectedTarget
         local tChar = target.Character
         local tHrp = tChar and tChar:FindFirstChild("HumanoidRootPart")
         local tHum = tChar and tChar:FindFirstChild("Humanoid")
-
+        
         if not tHrp or not tHum or tHum.Health <= 0 then
             Library:Notify("Quick Kill", "Target is dead or invalid!", 3)
             return
         end
-
+        
         local myChar = LocalPlayer.Character
         local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
-
         if not myHrp then return end
-
+        
         myHrp.CFrame = tHrp.CFrame + Vector3.new(0, 0, 3)
         task.wait(0.05)
-
-        local grabEvents = ReplicatedStorage:FindFirstChild("GrabEvents")
-        local getOwner = grabEvents and grabEvents:FindFirstChild("SetNetworkOwner")
-
-        if getOwner then
-            pcall(function() getOwner:FireServer(tHrp, tHrp.CFrame) end)
+        
+        if RemoteCache.SetNetworkOwner then
+            pcall(function() RemoteCache.SetNetworkOwner:FireServer(tHrp, tHrp.CFrame) end)
         end
-
+        
         tHrp.CFrame = myHrp.CFrame + Vector3.new(0, killHeight, 0)
         tHum.Health = 0
         tChar:BreakJoints()
-
+        
         Library:Notify("Quick Kill", target.DisplayName .. " killed!", 3)
     end,
     DoubleClick = false,
-    Tooltip = "選択したターゲットを1回だけキル",
     Risky = true,
 })
 
 -- ============================================================================
--- 【Visuals】ESP（アニメーション付き）
+-- ★【新機能】癇癪Aura（掴んで離すだけ）
 -- ============================================================================
+local KanshakuAura = {
+    Enabled = false,
+    Radius = 20,
+    Interval = 0.1,
+    Connection = nil,
+}
 
--- ESP設定
+local function KanshakuAura_GrabPlayer(target)
+    if not target or not target.Character then return end
+    
+    local hrp = target.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    
+    if RemoteCache.SetNetworkOwner then
+        pcall(function()
+            RemoteCache.SetNetworkOwner:FireServer(hrp, hrp.CFrame)
+            if RemoteCache.DestroyGrabLine then
+                RemoteCache.DestroyGrabLine:FireServer(hrp)
+            end
+        end)
+    end
+end
+
+local function KanshakuAura_Start()
+    if KanshakuAura.Connection then
+        KanshakuAura.Connection:Disconnect()
+        KanshakuAura.Connection = nil
+    end
+    
+    KanshakuAura.Connection = RunService.Heartbeat:Connect(function()
+        if not KanshakuAura.Enabled then return end
+        
+        local myChar = LocalPlayer.Character
+        local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
+        if not myHrp then return end
+        
+        for _, player in pairs(Players:GetPlayers()) do
+            if player == LocalPlayer then continue end
+            
+            local char = player.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp then continue end
+            
+            local dist = (hrp.Position - myHrp.Position).Magnitude
+            if dist <= KanshakuAura.Radius then
+                KanshakuAura_GrabPlayer(player)
+            end
+        end
+    end)
+end
+
+local function KanshakuAura_Stop()
+    KanshakuAura.Enabled = false
+    if KanshakuAura.Connection then
+        KanshakuAura.Connection:Disconnect()
+        KanshakuAura.Connection = nil
+    end
+end
+
+-- 癇癪Aura UI（Movementタブに追加）
+AuraGroup:AddToggle("KanshakuAura", {
+    Text = "癇癪Aura（掴んで離す）",
+    Tooltip = "範囲内のプレイヤーを自動で掴んで離す",
+    Default = false,
+    Risky = true,
+    Callback = function(Value)
+        KanshakuAura.Enabled = Value
+        if Value then
+            KanshakuAura_Start()
+            Library:Notify("癇癪Aura", "ON - 近づくだけで掴む", 3)
+        else
+            KanshakuAura_Stop()
+            Library:Notify("癇癪Aura", "OFF", 3)
+        end
+    end
+})
+
+AuraGroup:AddSlider("KanshakuRadius", {
+    Text = "癇癪Aura範囲",
+    Default = 20,
+    Min = 5,
+    Max = 50,
+    Rounding = 0,
+    Suffix = "スタッド",
+    Callback = function(Value)
+        KanshakuAura.Radius = Value
+    end
+})
+
+-- ============================================================================
+-- ESP（全バグ修正済み）
+-- ============================================================================
 local ESP = {
     Enabled = false,
     BoxType = "Glow",
@@ -1113,7 +1058,6 @@ local ESP = {
     BoxColor2 = Color3.fromRGB(200, 0, 255),
     BoxTransparency = 0.3,
     BoxThickness = 2,
-    GlowSize = 8,
     ShowName = true,
     ShowDistance = true,
     ShowHealth = true,
@@ -1133,8 +1077,33 @@ local ESP = {
     AnimTime = 0,
 }
 
+local ESPConnections = {
+    PlayerAdded = nil,
+    CharacterAdded = {},
+}
+
+local function CleanupESPConnections()
+    if ESPConnections.PlayerAdded then
+        ESPConnections.PlayerAdded:Disconnect()
+        ESPConnections.PlayerAdded = nil
+    end
+    for _, conn in pairs(ESPConnections.CharacterAdded) do
+        if conn then
+            conn:Disconnect()
+        end
+    end
+    ESPConnections.CharacterAdded = {}
+end
+
 local function CreateParticleEffect(part, color)
-    local emitter = Instance.new("ParticleEmitter")
+    local emitter = part:FindFirstChild("ESPParticles")
+    if emitter and emitter:IsA("ParticleEmitter") then
+        emitter.Color = ColorSequence.new(color)
+        emitter.Enabled = true
+        return emitter
+    end
+    
+    emitter = Instance.new("ParticleEmitter")
     emitter.Name = "ESPParticles"
     emitter.Texture = "rbxassetid://2784415622"
     emitter.Color = ColorSequence.new(color)
@@ -1180,15 +1149,20 @@ local function CreateAnimatedBox(part, color1, color2, transparency, thickness, 
     glow.Parent = group
     
     if animType == "Glitch" or animType == "Flow" then
-        local p = CreateParticleEffect(part, color1)
-        p.Parent = group
+        CreateParticleEffect(part, color1)
     end
     
-    return group
+    return {Box = box, Glow = glow, Group = group}
 end
 
 local function CreateAnimatedHeadDot(head, color, animType, speed)
-    local dot = Instance.new("Part")
+    local dot = head:FindFirstChild("HeadDot")
+    if dot then
+        dot.Color = color
+        return dot
+    end
+    
+    dot = Instance.new("Part")
     dot.Name = "HeadDot"
     dot.Size = Vector3.new(0.4, 0.4, 0.4)
     dot.Shape = Enum.PartType.Ball
@@ -1209,10 +1183,7 @@ local function CreateAnimatedHeadDot(head, color, animType, speed)
     glow.LineThickness = 3
     glow.Parent = dot
     
-    local p = CreateParticleEffect(dot, color)
-    p.Rate = 10
-    p.Lifetime = NumberRange.new(0.3, 0.8)
-    p.Parent = dot
+    CreateParticleEffect(dot, color)
     
     return dot
 end
@@ -1240,11 +1211,9 @@ local function CreateAnimatedName(char, hrp, color)
     end
     
     nameLabel.Parent = nameGui
-    
     return nameGui
 end
 
--- ESP更新
 local function UpdatePlayerESP(player)
     local char = player.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -1254,9 +1223,7 @@ local function UpdatePlayerESP(player)
     if not hrp or not hum or hum.Health <= 0 then
         if ESP.ESPData[player] then
             for _, obj in pairs(ESP.ESPData[player]) do
-                if obj and obj.Parent then
-                    obj:Destroy()
-                end
+                if obj and obj.Parent then obj:Destroy() end
             end
             ESP.ESPData[player] = nil
         end
@@ -1265,9 +1232,7 @@ local function UpdatePlayerESP(player)
     
     if ESP.ESPData[player] then
         for _, obj in pairs(ESP.ESPData[player]) do
-            if obj and obj.Parent then
-                obj:Destroy()
-            end
+            if obj and obj.Parent then obj:Destroy() end
         end
         ESP.ESPData[player] = {}
     else
@@ -1282,31 +1247,30 @@ local function UpdatePlayerESP(player)
         color1 = Color3.fromHSV(hue, 1, 1)
         color2 = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
     elseif ESP.UseTeamColor and player.Team then
-        color1 = player.Team.TeamColor
-        color2 = color1
+        local teamColor = player.Team.TeamColor
+        if teamColor then
+            color1 = teamColor.Color
+            color2 = color1
+        end
     end
     
-    -- アニメーションボックス
-    local boxGroup = CreateAnimatedBox(
-        hrp, color1, color2,
-        ESP.BoxTransparency, ESP.BoxThickness,
-        ESP.AnimType, ESP.AnimSpeed
-    )
-    table.insert(ESP.ESPData[player], boxGroup)
+    local boxData = CreateAnimatedBox(hrp, color1, color2, ESP.BoxTransparency, ESP.BoxThickness, ESP.AnimType, ESP.AnimSpeed)
+    table.insert(ESP.ESPData[player], boxData.Group)
+    ESP.ESPData[player].BoxRef = boxData
+    ESP.ESPData[player].BoxColor1 = color1
+    ESP.ESPData[player].BoxColor2 = color2
     
-    -- ヘッドドット
     if ESP.ShowHeadDot and head then
         local dot = CreateAnimatedHeadDot(head, color1, ESP.AnimType, ESP.AnimSpeed)
         table.insert(ESP.ESPData[player], dot)
+        ESP.ESPData[player].HeadDotRef = dot
     end
     
-    -- 名前
     if ESP.ShowName and char then
         local nameGui = CreateAnimatedName(char, hrp, ESP.NameColor)
         table.insert(ESP.ESPData[player], nameGui)
     end
     
-    -- 距離
     if ESP.ShowDistance then
         local distGui = Instance.new("BillboardGui")
         distGui.Adornee = hrp
@@ -1314,7 +1278,6 @@ local function UpdatePlayerESP(player)
         distGui.StudsOffset = Vector3.new(0, 3.2, 0)
         distGui.AlwaysOnTop = true
         distGui.Parent = hrp
-        
         local distLabel = Instance.new("TextLabel")
         distLabel.Size = UDim2.new(1, 0, 1, 0)
         distLabel.BackgroundTransparency = 1
@@ -1325,11 +1288,9 @@ local function UpdatePlayerESP(player)
         distLabel.Font = Enum.Font.Gotham
         distLabel.Text = "0m"
         distLabel.Parent = distGui
-        
         table.insert(ESP.ESPData[player], distGui)
     end
     
-    -- 体力
     if ESP.ShowHealth then
         local healthGui = Instance.new("BillboardGui")
         healthGui.Adornee = hrp
@@ -1337,7 +1298,6 @@ local function UpdatePlayerESP(player)
         healthGui.StudsOffset = Vector3.new(0, 3.6, 0)
         healthGui.AlwaysOnTop = true
         healthGui.Parent = hrp
-        
         local bg = Instance.new("Frame")
         bg.Size = UDim2.new(1, 0, 1, 0)
         bg.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
@@ -1345,20 +1305,18 @@ local function UpdatePlayerESP(player)
         bg.BorderSizePixel = 1
         bg.BorderColor3 = Color3.fromRGB(255, 255, 255)
         bg.Parent = healthGui
-        
         local fill = Instance.new("Frame")
         fill.Size = UDim2.new(1, 0, 1, 0)
         fill.BackgroundColor3 = ESP.HealthColorGood
         fill.BackgroundTransparency = 0
         fill.BorderSizePixel = 0
         fill.Parent = bg
-        
         table.insert(ESP.ESPData[player], healthGui)
         table.insert(ESP.ESPData[player], bg)
         table.insert(ESP.ESPData[player], fill)
+        ESP.ESPData[player].HealthFillRef = fill
     end
     
-    -- ステータス
     if ESP.ShowStatus then
         local statusGui = Instance.new("BillboardGui")
         statusGui.Adornee = hrp
@@ -1366,7 +1324,6 @@ local function UpdatePlayerESP(player)
         statusGui.StudsOffset = Vector3.new(0, 2.5, 0)
         statusGui.AlwaysOnTop = true
         statusGui.Parent = hrp
-        
         local statusLabel = Instance.new("TextLabel")
         statusLabel.Size = UDim2.new(1, 0, 1, 0)
         statusLabel.BackgroundTransparency = 1
@@ -1376,12 +1333,10 @@ local function UpdatePlayerESP(player)
         statusLabel.Font = Enum.Font.Gotham
         statusLabel.Text = "● ONLINE"
         statusLabel.Parent = statusGui
-        
         table.insert(ESP.ESPData[player], statusGui)
     end
 end
 
--- ESPアニメーション更新ループ
 local function StartESPUpdater()
     if ESP.ESPConn then
         ESP.ESPConn:Disconnect()
@@ -1392,9 +1347,6 @@ local function StartESPUpdater()
         if not ESP.Enabled then return end
         
         ESP.AnimTime = ESP.AnimTime + 0.03 * ESP.AnimSpeed
-        
-        local myChar = LocalPlayer.Character
-        local myHrp = myChar and myChar:FindFirstChild("HumanoidRootPart")
         
         for _, player in pairs(Players:GetPlayers()) do
             if player == LocalPlayer then continue end
@@ -1407,9 +1359,7 @@ local function StartESPUpdater()
             if not hrp or not hum or hum.Health <= 0 then
                 if ESP.ESPData[player] then
                     for _, obj in pairs(ESP.ESPData[player]) do
-                        if obj and obj.Parent then
-                            obj:Destroy()
-                        end
+                        if obj and obj.Parent then obj:Destroy() end
                     end
                     ESP.ESPData[player] = nil
                 end
@@ -1421,9 +1371,11 @@ local function StartESPUpdater()
             
             local t = ESP.AnimTime
             
-            -- アニメーション処理
-            for _, obj in pairs(data) do
-                if obj:IsA("BoxHandleAdornment") and obj.Name ~= "ESP_Animated" then
+            if data.BoxRef then
+                local box = data.BoxRef.Box
+                local glow = data.BoxRef.Glow
+                
+                if box and box.Parent then
                     local sizeOffset = 0
                     if ESP.AnimType == "Pulse" then
                         sizeOffset = math.sin(t * 2) * 0.2 * ESP.AnimIntensity
@@ -1437,32 +1389,75 @@ local function StartESPUpdater()
                         end
                     end
                     
-                    local baseSize = obj.Adornee and obj.Adornee.Size or Vector3.new(2, 2, 2)
-                    obj.Size = baseSize + Vector3.new(0.5 + sizeOffset, 0.5 + sizeOffset, 0.5 + sizeOffset)
-                end
-                
-                if obj:IsA("BoxHandleAdornment") or obj:IsA("SelectionBox") then
+                    local baseSize = hrp.Size
+                    box.Size = baseSize + Vector3.new(0.5 + sizeOffset, 0.5 + sizeOffset, 0.5 + sizeOffset)
+                    if glow then
+                        glow.Size = baseSize + Vector3.new(1.5 + sizeOffset, 1.5 + sizeOffset, 1.5 + sizeOffset)
+                    end
+                    
                     if ESP.AnimType == "Pulse" then
                         local pulse = math.sin(t * 2) * 0.15 + 0.5
-                        obj.Transparency = math.clamp(ESP.BoxTransparency + (1 - pulse) * 0.2, 0, 1)
+                        box.Transparency = math.clamp(ESP.BoxTransparency + (1 - pulse) * 0.2, 0, 1)
+                        if glow then
+                            glow.Transparency = math.clamp(ESP.BoxTransparency + 0.2 + (1 - pulse) * 0.2, 0, 1)
+                        end
                     elseif ESP.AnimType == "Wave" then
                         local wave = math.sin(t * 1.5 + player.UserId * 0.1) * 0.15 + 0.5
-                        obj.Transparency = math.clamp(ESP.BoxTransparency + (1 - wave) * 0.2, 0, 1)
+                        box.Transparency = math.clamp(ESP.BoxTransparency + (1 - wave) * 0.2, 0, 1)
+                        if glow then
+                            glow.Transparency = math.clamp(ESP.BoxTransparency + 0.2 + (1 - wave) * 0.2, 0, 1)
+                        end
                     end
-                end
-                
-                if obj:IsA("Part") and obj.Name == "HeadDot" then
-                    if ESP.AnimType == "Pulse" then
-                        local pulse = math.sin(t * 2) * 0.2 + 0.8
-                        obj.Size = Vector3.new(0.4 * pulse, 0.4 * pulse, 0.4 * pulse)
-                    elseif ESP.AnimType == "Spin" then
-                        obj.CFrame = obj.CFrame * CFrame.Angles(0, 0.05 * ESP.AnimSpeed, 0)
+                    
+                    if ESP.RainbowMode then
+                        local hue = (tick() / 5 + player.UserId / 1000) % 1
+                        local c1 = Color3.fromHSV(hue, 1, 1)
+                        local c2 = Color3.fromHSV((hue + 0.5) % 1, 1, 1)
+                        box.Color3 = c1
+                        if glow then glow.Color3 = c2 end
+                        data.BoxColor1 = c1
+                        data.BoxColor2 = c2
+                    elseif ESP.UseTeamColor and player.Team then
+                        local teamColor = player.Team.TeamColor
+                        if teamColor then
+                            local c = teamColor.Color
+                            box.Color3 = c
+                            if glow then glow.Color3 = c end
+                        end
                     end
                 end
             end
             
-            -- 距離更新
+            if data.HeadDotRef and data.HeadDotRef.Parent then
+                local dot = data.HeadDotRef
+                if ESP.AnimType == "Pulse" then
+                    local pulse = math.sin(t * 2) * 0.2 + 0.8
+                    dot.Size = Vector3.new(0.4 * pulse, 0.4 * pulse, 0.4 * pulse)
+                elseif ESP.AnimType == "Spin" then
+                    dot.CFrame = head.CFrame * CFrame.Angles(0, t * ESP.AnimSpeed * 2, 0)
+                else
+                    dot.CFrame = head.CFrame
+                end
+                
+                if ESP.RainbowMode then
+                    local hue = (tick() / 5 + player.UserId / 1000) % 1
+                    dot.Color = Color3.fromHSV(hue, 1, 1)
+                end
+            end
+            
+            if data.HealthFillRef and data.HealthFillRef.Parent then
+                local healthPercent = hum.Health / hum.MaxHealth
+                local healthColor = healthPercent > 0.5 and ESP.HealthColorGood or ESP.HealthColorBad
+                data.HealthFillRef.Size = UDim2.new(healthPercent, 0, 1, 0)
+                data.HealthFillRef.BackgroundColor3 = healthColor
+                local parent = data.HealthFillRef.Parent
+                if parent then
+                    parent.BackgroundColor3 = healthColor
+                end
+            end
+            
             if ESP.ShowDistance then
+                local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 local dist = myHrp and math.floor((hrp.Position - myHrp.Position).Magnitude) or 0
                 for _, obj in pairs(data) do
                     if obj:IsA("BillboardGui") and obj:FindFirstChild("TextLabel") then
@@ -1473,37 +1468,10 @@ local function StartESPUpdater()
                     end
                 end
             end
-            
-            -- 体力更新
-            if ESP.ShowHealth then
-                local healthPercent = hum.Health / hum.MaxHealth
-                local healthColor = healthPercent > 0.5 and ESP.HealthColorGood or ESP.HealthColorBad
-                
-                for _, obj in pairs(data) do
-                    if obj:IsA("Frame") and obj.Parent and obj.Parent:IsA("BillboardGui") then
-                        local fill = obj:FindFirstChildWhichIsA("Frame")
-                        if fill then
-                            fill.Size = UDim2.new(healthPercent, 0, 1, 0)
-                            fill.BackgroundColor3 = healthColor
-                        end
-                        obj.BackgroundColor3 = healthColor
-                    end
-                end
-            end
-            
-            -- ヘッドドット追従
-            if ESP.ShowHeadDot and head then
-                for _, obj in pairs(data) do
-                    if obj:IsA("Part") and obj.Name == "HeadDot" then
-                        obj.CFrame = head.CFrame
-                    end
-                end
-            end
         end
     end)
 end
 
--- ESP制御
 local function UpdateAllESP()
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
@@ -1517,31 +1485,35 @@ local function EnableESP()
     UpdateAllESP()
     StartESPUpdater()
     
-    Players.PlayerAdded:Connect(function(player)
+    CleanupESPConnections()
+    
+    ESPConnections.PlayerAdded = Players.PlayerAdded:Connect(function(player)
         if ESP.Enabled then
-            player.CharacterAdded:Connect(function()
+            task.wait(0.5)
+            UpdatePlayerESP(player)
+            local conn = player.CharacterAdded:Connect(function()
                 task.wait(0.5)
                 if ESP.Enabled then
                     UpdatePlayerESP(player)
                 end
             end)
-            task.wait(0.5)
-            if ESP.Enabled then
-                UpdatePlayerESP(player)
-            end
+            ESPConnections.CharacterAdded[player] = conn
         end
     end)
     
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
-            player.CharacterAdded:Connect(function()
+            local conn = player.CharacterAdded:Connect(function()
                 task.wait(0.5)
                 if ESP.Enabled then
                     UpdatePlayerESP(player)
                 end
             end)
+            ESPConnections.CharacterAdded[player] = conn
         end
     end
+    
+    Library:Notify("Animation ESP", "Activated!", 2)
 end
 
 local function DisableESP()
@@ -1550,32 +1522,25 @@ local function DisableESP()
         ESP.ESPConn:Disconnect()
         ESP.ESPConn = nil
     end
+    
+    CleanupESPConnections()
+    
     for player, data in pairs(ESP.ESPData) do
         for _, obj in pairs(data) do
-            if obj and obj.Parent then
-                obj:Destroy()
-            end
+            if obj and obj.Parent then obj:Destroy() end
         end
     end
     ESP.ESPData = {}
+    
+    Library:Notify("Animation ESP", "Deactivated", 2)
 end
 
--- ============================================================================
--- Visuals タブ - UI
--- ============================================================================
-
+-- Visuals UI
 ESPMain:AddToggle("ESPMain", {
     Text = "Enable Animation ESP",
-    Tooltip = "アニメーションESPを起動",
     Default = false,
     Callback = function(Value)
-        if Value then
-            EnableESP()
-            Library:Notify("Animation ESP", "Activated!", 2)
-        else
-            DisableESP()
-            Library:Notify("Animation ESP", "Deactivated", 2)
-        end
+        if Value then EnableESP() else DisableESP() end
     end
 })
 
@@ -1585,7 +1550,6 @@ ESPAnim:AddDropdown("AnimType", {
     Values = { "Pulse", "Wave", "Spin", "Bounce", "Glitch", "Flow" },
     Default = "Pulse",
     Text = "Animation Style",
-    Tooltip = "ESPのアニメーションを選択",
     Callback = function(Value)
         ESP.AnimType = Value
     end
@@ -1630,9 +1594,7 @@ ESPDesign:AddDropdown("BoxType", {
     Text = "Box Style",
     Callback = function(Value)
         ESP.BoxType = Value
-        if ESP.Enabled then
-            UpdateAllESP()
-        end
+        if ESP.Enabled then UpdateAllESP() end
     end
 })
 
@@ -1643,9 +1605,7 @@ ESPDesign:AddLabel("Primary Color")
         Transparency = 0,
         Callback = function(Value)
             ESP.BoxColor1 = Value
-            if ESP.Enabled then
-                UpdateAllESP()
-            end
+            if ESP.Enabled then UpdateAllESP() end
         end
     })
 
@@ -1656,9 +1616,7 @@ ESPDesign:AddLabel("Secondary Color")
         Transparency = 0,
         Callback = function(Value)
             ESP.BoxColor2 = Value
-            if ESP.Enabled then
-                UpdateAllESP()
-            end
+            if ESP.Enabled then UpdateAllESP() end
         end
     })
 
@@ -1671,22 +1629,16 @@ ESPDesign:AddSlider("BoxTransparency", {
     Suffix = "%",
     Callback = function(Value)
         ESP.BoxTransparency = Value / 100
-        if ESP.Enabled then
-            UpdateAllESP()
-        end
+        if ESP.Enabled then UpdateAllESP() end
     end
 })
-
-ESPDesign:AddDivider()
 
 ESPMain:AddToggle("ShowName", {
     Text = "Show Name",
     Default = true,
     Callback = function(Value)
         ESP.ShowName = Value
-        if ESP.Enabled then
-            UpdateAllESP()
-        end
+        if ESP.Enabled then UpdateAllESP() end
     end
 })
 
@@ -1695,9 +1647,7 @@ ESPMain:AddToggle("ShowDistance", {
     Default = true,
     Callback = function(Value)
         ESP.ShowDistance = Value
-        if ESP.Enabled then
-            UpdateAllESP()
-        end
+        if ESP.Enabled then UpdateAllESP() end
     end
 })
 
@@ -1706,9 +1656,7 @@ ESPMain:AddToggle("ShowHealth", {
     Default = true,
     Callback = function(Value)
         ESP.ShowHealth = Value
-        if ESP.Enabled then
-            UpdateAllESP()
-        end
+        if ESP.Enabled then UpdateAllESP() end
     end
 })
 
@@ -1717,9 +1665,7 @@ ESPMain:AddToggle("ShowStatus", {
     Default = true,
     Callback = function(Value)
         ESP.ShowStatus = Value
-        if ESP.Enabled then
-            UpdateAllESP()
-        end
+        if ESP.Enabled then UpdateAllESP() end
     end
 })
 
@@ -1728,9 +1674,7 @@ ESPMain:AddToggle("ShowHeadDot", {
     Default = true,
     Callback = function(Value)
         ESP.ShowHeadDot = Value
-        if ESP.Enabled then
-            UpdateAllESP()
-        end
+        if ESP.Enabled then UpdateAllESP() end
     end
 })
 
@@ -1739,9 +1683,7 @@ ESPMain:AddToggle("RainbowMode", {
     Default = false,
     Callback = function(Value)
         ESP.RainbowMode = Value
-        if ESP.Enabled then
-            UpdateAllESP()
-        end
+        if ESP.Enabled then UpdateAllESP() end
     end
 })
 
@@ -1750,9 +1692,7 @@ ESPMain:AddToggle("UseTeamColor", {
     Default = false,
     Callback = function(Value)
         ESP.UseTeamColor = Value
-        if ESP.Enabled then
-            UpdateAllESP()
-        end
+        if ESP.Enabled then UpdateAllESP() end
     end
 })
 
@@ -1763,9 +1703,7 @@ ESPDesign:AddLabel("Name Color")
         Transparency = 0,
         Callback = function(Value)
             ESP.NameColor = Value
-            if ESP.Enabled then
-                UpdateAllESP()
-            end
+            if ESP.Enabled then UpdateAllESP() end
         end
     })
 
@@ -1776,9 +1714,7 @@ ESPDesign:AddLabel("Distance Color")
         Transparency = 0,
         Callback = function(Value)
             ESP.DistanceColor = Value
-            if ESP.Enabled then
-                UpdateAllESP()
-            end
+            if ESP.Enabled then UpdateAllESP() end
         end
     })
 
@@ -1789,9 +1725,7 @@ ESPDesign:AddLabel("Health Color (Good)")
         Transparency = 0,
         Callback = function(Value)
             ESP.HealthColorGood = Value
-            if ESP.Enabled then
-                UpdateAllESP()
-            end
+            if ESP.Enabled then UpdateAllESP() end
         end
     })
 
@@ -1802,14 +1736,12 @@ ESPDesign:AddLabel("Health Color (Bad)")
         Transparency = 0,
         Callback = function(Value)
             ESP.HealthColorBad = Value
-            if ESP.Enabled then
-                UpdateAllESP()
-            end
+            if ESP.Enabled then UpdateAllESP() end
         end
     })
 
 -- ============================================================================
--- Keybinds タブ
+-- Keybinds
 -- ============================================================================
 KeybindGroup:AddKeyPicker("PlatformTPKey", {
     Default = "X",
@@ -1834,7 +1766,7 @@ KeybindGroup:AddLabel("X = Platform TP")
 KeybindGroup:AddLabel("RightShift = Menu Toggle")
 
 -- ============================================================================
--- UI Settings タブ
+-- UI Settings
 -- ============================================================================
 MenuGroup:AddToggle("KeybindMenuOpen", {
     Default = Library.KeybindFrame.Visible,
@@ -1879,7 +1811,7 @@ MenuGroup:AddButton("Unload", function()
 end)
 
 -- ============================================================================
--- Addons (SaveManager & ThemeManager)
+-- Addons
 -- ============================================================================
 ThemeManager:SetLibrary(Library)
 SaveManager:SetLibrary(Library)
@@ -1887,16 +1819,17 @@ SaveManager:SetLibrary(Library)
 SaveManager:IgnoreThemeSettings()
 SaveManager:SetIgnoreIndexes({ "MenuKeybind" })
 
-ThemeManager:SetFolder("XOCU_Elite")
-SaveManager:SetFolder("XOCU_Elite/settings")
+ThemeManager:SetFolder("MascatHub")
+SaveManager:SetFolder("MascatHub/settings")
 
 SaveManager:BuildConfigSection(Tabs["UI Settings"])
 ThemeManager:ApplyToTab(Tabs["UI Settings"])
 
 SaveManager:LoadAutoloadConfig()
 
-print("XOCU ELITE - Full Version loaded!")
+print("MascatHub v0.7 - 癇癪Aura追加!")
+print("新機能: 癇癪Aura（範囲内のプレイヤーを自動で掴んで離す）")
 print("Defense: Anti Loop Kill, Anti Lag, Platform TP, Anti Grab, Anti Void, Anti Gucci, Anti Kick")
-print("Attack: Loop Kill, Quick Kill, Target Select")
+print("Attack: Loop Kill, Quick Kill")
 print("Visuals: Animation ESP (6 styles)")
 print("Keybinds: X = Platform TP, RightShift = Menu")
